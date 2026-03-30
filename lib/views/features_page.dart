@@ -1,5 +1,6 @@
 // ignore_for_file: library_private_types_in_public_api
 
+import 'package:demo_ai_even/views/ble_probe_page.dart';
 import 'package:demo_ai_even/views/notification_settings_page.dart';
 import 'package:demo_ai_even/views/settings_page.dart';
 import 'package:flutter/material.dart';
@@ -59,6 +60,26 @@ class _FeaturesPageState extends State<FeaturesPage> {
                   ),
                   alignment: Alignment.center,
                   child: const Text('Notifications',
+                      style: TextStyle(fontSize: 16)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const BleProbePage()),
+                  );
+                },
+                child: Container(
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text('BLE Probe',
                       style: TextStyle(fontSize: 16)),
                 ),
               ),

@@ -11,69 +11,154 @@ Compiled from the official EvenDemoApp, MentraOS `G1.swift`, `G1.java`, and `Enu
 | UART Service UUID | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` |
 | TX Characteristic (write) | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` |
 | RX Characteristic (notify) | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` |
+| Client Characteristic Config descriptor | `00002902-0000-1000-8000-00805f9b34fb` |
 | Negotiated MTU | 251 bytes |
-| Max practical chunk | ~194 bytes (BMP) / ~180 bytes (JSON) |
+| Max practical chunk | ~194 bytes (BMP) / ~176 bytes (JSON) |
 | ACK byte | `0xC9` |
+| CONTINUE byte | `0xCB` |
 
-The G1 has **two independent BLE connections**, one per arm (L/R). Most commands go to both arms. Exceptions are noted below. Always send L first; wait for ACK before sending R. `BleManager.sendBoth()` / `BleManager.requestList()` handle this.
+The G1 has **two independent BLE connections**, one per arm (L/R). Always send L first; wait for ACK before sending R. `BleManager.sendBoth()` / `BleManager.requestList()` handle this.
+
+---
+
+## Enums
+
+### `Commands` (outbound command byte)
+| Name | Hex |
+|------|-----|
+| `BRIGHTNESS` | `0x01` |
+| `SILENT_MODE` | `0x03` |
+| `WHITELIST` | `0x04` |
+| `DASHBOARD_SHOW` | `0x06` |
+| `HEAD_UP_ANGLE` | `0x0B` |
+| `BLE_REQ_MIC_ON` | `0x0E` |
+| `CRC_CHECK` | `0x16` |
+| `BLE_EXIT_ALL_FUNCTIONS` | `0x18` |
+| `QUICK_NOTE_ADD` | `0x1E` |
+| `BMP_END` | `0x20` |
+| `BLE_REQ_HEARTBEAT` | `0x25` |
+| `DASHBOARD_LAYOUT_COMMAND` | `0x26` |
+| `BLE_REQ_BATTERY` | `0x2C` |
+| `UNK_2` | `0x39` |
+| `BLE_REQ_INIT` | `0x4D` |
+| `NOTIFICATION` | `0x4B` |
+| `BLE_REQ_EVENAI` | `0x4E` |
+| `UNK_1` | `0x50` |
+| `BLE_REQ_TRANSFER_MIC_DATA` | `0xF1` |
+| `BLE_REQ_DEVICE_ORDER` | `0xF5` |
+
+### `DeviceOrders` (inbound `0xF5` sub-byte)
+| Name | Hex | Meaning |
+|------|-----|---------|
+| `DISPLAY_READY` | `0x00` | Display ready for content |
+| `TRIGGER_CHANGE_PAGE` | `0x01` | Single tap — page change |
+| `HEAD_UP2` | `0x02` | Head tilted up (R arm) |
+| `HEAD_DOWN2` | `0x03` | Head tilted down (R arm) |
+| `SILENCED` | `0x04` | Glasses silenced |
+| `ACTIVATED` | `0x05` | Glasses activated |
+| `CASE_REMOVED2` | `0x06` | Removed from case (alt) |
+| `CASE_REMOVED` | `0x07` | Removed from case |
+| `CASE_OPEN` | `0x08` | Case lid opened |
+| `G1_IS_READY` | `0x09` | Glasses boot complete |
+| `CASE_CLOSED` | `0x0B` | Case lid closed |
+| `CASE_CHARGING_STATUS` | `0x0E` | Case charging state, `data[2]=0x01` charging |
+| `CASE_CHARGE_INFO` | `0x0F` | Case battery %, `data[2]` = level |
+| `TRIGGER_FOR_AI` | `0x17` | Long-press L / "Hey Even" — start recording |
+| `TRIGGER_FOR_STOP_RECORDING` | `0x18` | Release — stop recording |
+| `HEAD_UP` | `0x1E` | Head up (alternate event) |
+| `HEAD_DOWN` | `0x1F` | Head down (alternate, rarely fired) |
+| `DOUBLE_TAP` | `0x20` | Double tap |
+
+### `DisplayStatus` (upper nibble of `newScreen` byte in `0x4E` packets)
+| Name | Hex | Meaning |
+|------|-----|---------|
+| `NORMAL_TEXT` | `0x30` | Even AI displaying (auto mode) |
+| `FINAL_TEXT` | `0x40` | Even AI last page (auto) |
+| `MANUAL_PAGE` | `0x50` | Even AI manual page mode |
+| `ERROR_TEXT` | `0x60` | Network error |
+| `SIMPLE_TEXT` | `0x70` | Plain text show |
+
+### `DashboardHeight` (0x26 height byte)
+`0x00` = bottom … `0x08` = top
+
+### `DashboardDepth` (0x26 depth byte)
+`0x01` = shallowest … `0x09` = deepest
+
+### `DashboardMode`
+| Name | Hex |
+|------|-----|
+| `full` | `0x00` |
+| `dual` | `0x01` |
+| `minimal` | `0x02` |
+
+---
+
+## ⚠️ Critical Correction vs EvenDemoApp
+
+The EvenDemoApp maps `0xF5 0x00` as double-tap. **This is incorrect.**
+
+Per MentraOS `Enums.swift` and `G1.java`:
+- `0xF5 0x00` = **DISPLAY_READY** (glasses display is ready for content)
+- `0xF5 0x20` = **DOUBLE_TAP** (actual double-tap gesture)
+
+MentraOS also notes the Android double-tap handling is "completely broken — clears the screen" and has it commented out. The EvenDemoApp likely re-purposed `0x00` empirically. On your specific firmware version, test what `0x00` actually fires, and whether `0x20` arrives on a real double-tap.
+
+Similarly, MentraOS defines `0xF5 0x04` = SILENCED and `0xF5 0x05` = ACTIVATED — not triple-tap as mapped in EvenDemoApp. The triple-tap behaviour may vary by firmware version.
 
 ---
 
 ## Outbound Commands (App → Glasses)
 
 ### Connection init sequence
-Sent immediately after both arms connect, in this order:
+Sent after both arms connect, in this order. Allow 350ms after connect before beginning.
 
 ```
-[0x6E, 0x74]            → both  — firmware version request
-[0x4D, 0xFB]            → L only — init (Android)
-[0x4D, 0x01]            → both  — init (iOS)
-[0x27, 0x00]            → both  — disable wear detection
-[0x03, 0x0A]            → both  — silent mode off
-whitelist (0x04)         → both  — push app whitelist (see below)
-brightness (0x01)        → both  — restore brightness setting
-head-up angle (0x0B)     → both  — restore look-up angle setting
+[0x6E, 0x74]              → both   — firmware version request (Android only)
+[0x4D, 0x01]              → both   — init
+[0x27, 0x00]              → both   — disable wear detection (Android)
+[0x03, 0x0A]              → both   — silent mode off
+whitelist 0x04            → both   — push app whitelist
+brightness 0x01           → both   — restore brightness
+head-up angle 0x0B        → both   — restore look-up angle
 ```
-
-350ms delay after connect before sending init sequence (firmware needs time to be ready).
 
 ---
 
 ### Heartbeat — `0x25`
-Keep-alive, sent every ~8 seconds.
+Sent every ~8–20 seconds.
 
 ```
-[0x25, 0x06, seq, 0x00, 0x04, seq]
+iOS:     [0x25, seq]                           (2 bytes)
+Android: [0x25, 0x06, seq, 0x00, 0x04, seq]   (6 bytes)
 ```
 
-`seq` is a rolling `uint8` counter. Send to both arms. Also piggybacks a battery query on Android:
+`seq` rolls 0–255. Also piggybacks battery query each cycle:
 ```
-[0x2C, 0x01]   → Android
-[0x2C, 0x02]   → iOS
+[0x2C, 0x01]    (both platforms; iOS may use 0x02 as second byte)
 ```
 
 ---
 
 ### Microphone — `0x0E`
 ```
-[0x0E, 0x01]   mic on  → R arm
-[0x0E, 0x00]   mic off → R arm
+[0x0E, 0x01]   mic on  → R arm only
+[0x0E, 0x00]   mic off → R arm only
 ```
 
-On Android, MentraOS also sends a **"micbeat"** — repeating `[0x0E, 0x01]` every few seconds while mic is active, to prevent firmware timeout.
+Android sends a **micbeat** — repeated `[0x0E, 0x01]` every few seconds while mic is active to prevent firmware timeout.
 
 ---
 
 ### Text / EvenAI Display — `0x4E`
-Multi-packet. See `EvenaiProto.evenaiMultiPackListV2()` in the existing codebase for the full packet builder. Key header bytes:
+Multi-packet. Packet builder in `EvenaiProto.evenaiMultiPackListV2()`.
 
 ```
-[0x4E, seq, totalPkts, currentPkt, newScreen, charPos0, charPos1, pageNum, maxPages, ...utf8text]
+[0x4E, seq, totalPkts, currentPkt, newScreen, charPos0, charPos1, pageNum, maxPages, ...utf8]
 ```
 
-`newScreen` byte:
-- Upper nibble: `0x30` displaying (auto), `0x40` last page (auto), `0x50` manual, `0x60` error, `0x70` text show
-- Lower nibble: `0x01` new content
+`newScreen` = `DisplayStatus` upper nibble | `0x01` new content. Example: `0x71` = text show + new content.
+Max payload per chunk: ~176 bytes.
+ACK: `[0x4E, 0xC9, seq]` matched by seq in `data[2]`.
 
 ---
 
@@ -81,37 +166,34 @@ Multi-packet. See `EvenaiProto.evenaiMultiPackListV2()` in the existing codebase
 ```
 [0x01, level, autoMode]
 ```
-- `level`: 0–41 (maps from 0–100%). 0x00–0x29.
-- `autoMode`: `0x01` = auto brightness on, `0x00` = manual
+- `level`: 0–41 (iOS, 0x00–0x29) / 0–63 (Android, maps from 0–100%)
+- `autoMode`: `0x01` auto on, `0x00` manual
 
 ACK: `[0x01, 0xC9]`
 
 ---
 
 ### Head-Up Angle — `0x0B`
-Configures how far the user must tilt their head before `0xF5 0x02` fires.
+How far the user must tilt their head before `0xF5 0x02` fires.
 
 ```
 [0x0B, angle, 0x01]
 ```
-- `angle`: 0–60 (degrees). Clamped by firmware.
+- `angle`: 0–60 degrees (clamped by firmware)
 
 ACK: `[0x0B, 0xC9]`
 
 ---
 
 ### Dashboard Position — `0x26`
-Sets the Y position (height) and Z depth of the dashboard overlay.
-
 ```
 [0x26, 0x08, 0x00, counter, 0x02, 0x01, height, depth]
 ```
-- `counter`: rolling `uint8`, must increment on each call.
-- `height`: 0–8
-- `depth`: 1–9
-- **Left arm only.**
+- `counter`: rolling `uint8`, must increment each call
+- `height`: 0–8 (DashboardHeight)
+- `depth`: 1–9 (DashboardDepth)
 
-ACK: `[0x26, 0x06]` (the 0x06 is hardcoded in firmware; MentraOS notes "seems arbitrary").
+ACK: `[0x26, 0x06]` (hardcoded firmware value, noted as "seems arbitrary" in MentraOS source)
 
 ---
 
@@ -126,24 +208,22 @@ ACK: `[0x03, 0xC9]`
 ---
 
 ### Exit / Home — `0x18`
-Returns glasses to dashboard. **Left arm only**, with ~100ms post-send delay.
-
 ```
 [0x18]
 ```
-
+Returns glasses to dashboard. Both arms, ~100ms post-send delay.
 ACK: `[0x18, 0xC9]`
 
 ---
 
 ### Notification Whitelist — `0x04`
-Chunked JSON. Max 176 bytes payload per chunk.
+Chunked JSON, max 176 bytes payload per chunk.
 
 ```
-Header per chunk: [0x04, totalChunks, chunkIndex, 0x00] + jsonPayload
+[0x04, totalChunks, chunkIndex, ...jsonPayload]
 ```
 
-JSON body (see `NotifyWhitelistModel.toJson()`):
+JSON:
 ```json
 {
   "calendar_enable": false,
@@ -157,18 +237,17 @@ JSON body (see `NotifyWhitelistModel.toJson()`):
 }
 ```
 
-ACK sequence: glasses first send `[0x04, 0xCB]` per chunk ("continue"), then `[0x04, 0xC9]` at the end.
+ACK sequence: `[0x04, 0xCB]` per intermediate chunk, then `[0x04, 0xC9]` final.
 
 ---
 
 ### Notification Send — `0x4B`
-Push a notification to the display. Chunked JSON, max 176 bytes payload per chunk.
-
 ```
-Header per chunk: [0x4B, notifyId, totalChunks, chunkIndex] + jsonPayload
+[0x4B, notifyId, totalChunks, chunkIndex, ...jsonPayload]
 ```
+`notifyId` rolls 0–255. Max 176 bytes payload per chunk.
 
-JSON body:
+JSON:
 ```json
 {
   "msg_id": 1234567890,
@@ -181,157 +260,141 @@ JSON body:
 }
 ```
 
-`notifyId` is a rolling 0–255 counter.
-
 ---
 
-### Quick Note — `0x1E`
+### Quick Notes — `0x1E`
 
-**Add/update** (slot 0-based, up to a firmware-defined max):
+**Add / update** (slot is 0-based):
 ```
 [0x1E, payloadLen, 0x00, versionByte,
- 0x03, 0x01, 0x00, 0x01, 0x00,   ← fixed bytes
- slotNumber,
- 0x01,
- nameLen, ...name bytes,
- textLen, 0x00, ...text bytes]
+ 0x03, 0x01, 0x00, 0x01, 0x00,
+ slotNumber, 0x01,
+ nameLen, ...nameBytes,
+ textLen, 0x00, ...textBytes]
 ```
-`versionByte` = `(unix_timestamp % 256)` — used by firmware to detect staleness.
+`versionByte` = `unix_timestamp % 256` (firmware uses this to detect staleness).
 
 **Delete** (by slot number):
 ```
 [0x1E, 0x10, 0x00, 0xE0,
- 0x03, 0x01, 0x00, 0x01, 0x00,   ← fixed bytes
+ 0x03, 0x01, 0x00, 0x01, 0x00,
  noteNumber,
  0x00, 0x01, 0x00, 0x01, 0x00, 0x00]
 ```
 
-ACK: `[0x1E, 0x10]` or `[0x1E, 0x43]`
+ACK: `data[1] == 0x10` or `data[1] == 0x43`
 
 ---
 
-### BMP Image — `0x15` / `0x20` / `0x16`
-1-bit 576×136px BMP. Sent in 194-byte chunks.
+### BMP Image — `0x15` + `0x20` + `0x16`
+1-bit 576×136px BMP. 194-byte data chunks.
 
-**Chunk format:**
+**Chunks:**
 ```
-First chunk:  [0x15, seq, 0x00, 0x1C, 0x00, 0x00, ...194 bytes of BMP data]
-Other chunks: [0x15, seq, ...194 bytes of BMP data]
+First:  [0x15, 0x00, 0x00, 0x1C, 0x00, 0x00, ...194 bytes BMP]
+Others: [0x15, seqIndex, ...194 bytes BMP]
 ```
-`seq` is chunk index (0-based uint8).
+`seqIndex` = chunk index, 0-based uint8.
 
-**End command** (after all chunks):
+**End command:**
 ```
 [0x20, 0x0D, 0x0E]
 ```
+ACK: `[0x20, 0xC9]`
 
-**CRC check** — `0x16`:
-CRC32-XZ (big-endian) of the full BMP data including the storage address prefix. See `Proto` crc methods.
+**CRC:**
+```
+[0x16, crc_byte3, crc_byte2, crc_byte1, crc_byte0]   (big-endian CRC32-XZ)
+```
+CRC input = `[0x00, 0x1C, 0x00, 0x00]` + full inverted BMP data.
 
-Send all chunks to both arms simultaneously (not sequentially L→R like other commands).
+> **Note:** Pixel bytes must be **bitwise inverted** (XOR `0xFF` on every byte after the 62-byte BMP header) before sending. EvenDemoApp does not do this; MentraOS does. Test both on your firmware.
 
-> **Note:** MentraOS inverts BMP pixel bits before sending (`invertBmpPixels()`). The official EvenDemoApp does not — test both if images look wrong.
+BMP chunks are sent to both arms simultaneously (not L→R sequentially).
+ACK: `[0x16, seqNum]` — always success.
+
+---
+
+### Quick Restart — `0x23 0x72` (Android only)
+```
+[0x23, 0x72]   → both arms
+```
+Undocumented restart command found in MentraOS G1.java.
 
 ---
 
 ## Inbound Events (Glasses → App)
 
-### Touch / gesture — `0xF5 0xNN`
+### `0xF5 0xNN` — Device orders
 
-| `data[1]` | Event | Notes |
-|-----------|-------|-------|
-| `0x00` | Double-tap | Exit or toggle recording |
-| `0x01` | Single-tap | Page navigation |
-| `0x02` | **Head up** | User tilted head up past configured angle |
-| `0x03` | Head down | User tilted head back down |
-| `0x04` | Triple-tap (L) | Mode cycle / session reset |
-| `0x05` | Triple-tap (R) | Mode cycle / session reset |
-| `0x06` | Case removed | Glasses taken out of case |
-| `0x07` | Case removed (alt) | Glasses taken out of case |
-| `0x08` | Case opened | Case lid opened |
-| `0x0B` | Case closed | Case lid closed |
-| `0x0E` | Case charging state | `data[2]`: `0x01` = charging |
-| `0x0F` | Case battery level | `data[2]`: battery % |
-| `0x17` | EvenAI start | Long-press L or "Hey Even" wake word |
-| `0x18` | EvenAI stop | Release trigger / stop recording |
+See DeviceOrders enum table above for full mapping.
+
+Key events for this app:
+
+| Pattern | Event | Notes |
+|---------|-------|-------|
+| `0xF5 0x02` | Head up | R arm only. Configure threshold with `0x0B`. |
+| `0xF5 0x03` | Head down | R arm only. |
+| `0xF5 0x17` | Start recording | Long-press L or "Hey Even" wake word |
+| `0xF5 0x18` | Stop recording | Release |
+| `0xF5 0x20` | Double tap | See correction note above |
+| `0xF5 0x01` | Single tap | Page navigation |
+| `0xF5 0x1E` | Head up (alt) | Alternate head-up event |
 
 ---
 
-### Audio — `0xF1`
+### `0xF1` — LC3 Audio
 ```
-data[0] = 0xF1
-data[1] = seq      ← sequence number
-data[2..201]       ← 200 bytes of LC3-encoded audio
+[0xF1, seq, ...200 bytes LC3 data]
 ```
+R arm only.
 
 ---
 
-### Battery response — `0x2C 0x66`
+### `0x2C 0x66` — Battery response
 ```
-data[0] = 0x2C
-data[1] = 0x66
-data[2..] ← battery info (format TBD, check raw logs)
+[0x2C, 0x66, batteryPercent, flags, voltage_lo, voltage_hi, ...]
 ```
 
 ---
 
-### Heartbeat response — `0x25`
+### `0x25` — Heartbeat response
 ```
-data[0] = 0x25
-data[1] = counter  ← mirrors seq from request
+[0x25, counter]
 ```
 
 ---
 
-### EvenAI display ack — `0x4E`
+### `0x4E` — EvenAI display ACK
 ```
-data[0] = 0x4E
-data[1] = seq
+[0x4E, 0xC9, seq]
 ```
+Matched by `seq` in `data[2]`.
+
+---
+
+### `0x4D` — Init ACK
+```
+[0x4D, 0xC9]
+```
+Triggers full boot sequence when received from both arms.
 
 ---
 
 ## Unknown Commands
 
-| Hex | Enum name | Notes |
-|-----|-----------|-------|
-| `0x39` | `UNK_2` | ACKed with `0xC9`; purpose unknown |
-| `0x50` | `UNK_1` | ACKed with `0xC9`; purpose unknown |
+| Hex | Enum | Notes |
+|-----|------|-------|
+| `0x39` | `UNK_2` | ACKs with `0xC9`. Purpose unknown. |
+| `0x50` | `UNK_1` | ACKs with `0xC9`. Purpose unknown. |
 
-Worth probing: send `[0x39]` and `[0x50]` while logging all responses to discover function.
-
----
-
-## Full Command Enum (from `Enums.swift`)
-
-| Name | Hex |
-|------|-----|
-| `BRIGHTNESS` | `0x01` |
-| `SILENT_MODE` | `0x03` |
-| `WHITELIST` | `0x04` |
-| `DASHBOARD_SHOW` | `0x06` |
-| `HEAD_UP_ANGLE` | `0x0B` |
-| `BLE_REQ_MIC_ON` | `0x0E` |
-| `BLE_REQ_TRANSFER_MIC_DATA` | `0xF1` |
-| `QUICK_NOTE_ADD` | `0x1E` |
-| `BMP_END` | `0x20` |
-| `BLE_REQ_HEARTBEAT` | `0x25` |
-| `DASHBOARD_LAYOUT_COMMAND` | `0x26` |
-| `BLE_REQ_BATTERY` | `0x2C` |
-| `UNK_2` | `0x39` |
-| `BLE_REQ_INIT` | `0x4D` |
-| `BLE_REQ_EVENAI` | `0x4E` |
-| `NOTIFICATION` | `0x4B` |
-| `UNK_1` | `0x50` |
-| `CRC_CHECK` | `0x16` |
-| `BLE_EXIT_ALL_FUNCTIONS` | `0x18` |
-| `BLE_REQ_DEVICE_ORDER` | `0xF5` |
+Worth probing: send `[0x39]` and `[0x50]` while watching display and sensors to discover function.
 
 ---
 
-## Source references
+## Sources
 
-- `MentraOS/mobile/modules/core/ios/Source/sgcs/G1.swift`
-- `MentraOS/mobile/modules/core/android/src/main/java/com/mentra/core/sgcs/G1.java`
-- `MentraOS/mobile/modules/core/ios/Source/utils/Enums.swift`
-- `even-realities/EvenDemoApp` (official Flutter demo)
+- [MentraOS G1.swift](https://github.com/Mentra-Community/MentraOS/blob/main/mobile/modules/core/ios/Source/sgcs/G1.swift)
+- [MentraOS G1.java](https://github.com/Mentra-Community/MentraOS/blob/main/mobile/modules/core/android/src/main/java/com/mentra/core/sgcs/G1.java)
+- [MentraOS Enums.swift](https://github.com/Mentra-Community/MentraOS/blob/main/mobile/modules/core/ios/Source/utils/Enums.swift)
+- [even-realities/EvenDemoApp](https://github.com/even-realities/EvenDemoApp)

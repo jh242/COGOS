@@ -34,6 +34,9 @@ class BleManager {
   bool isConnected = false;
   String connectionStatus = 'Not connected';
 
+  final _bleEventLog = StreamController<String>.broadcast();
+  Stream<String> get bleEventStream => _bleEventLog.stream;
+
   void _init() {}
 
   void startListening() {
@@ -149,13 +152,18 @@ class BleManager {
       print(
         "${DateTime.now()} BleManager receive cmd: $cmd, len: ${res.data.length}, data = ${res.data.hexString}",
       );
+      _bleEventLog.add(
+          '[${DateTime.now().toIso8601String().substring(11, 23)}] ← ${res.lr}: ${res.data.hexString}');
     }
 
     if (res.data[0].toInt() == 0xF5) {
       final notifyIndex = res.data[1].toInt();
-      
+      final hexEvent =
+          '0xF5 0x${notifyIndex.toRadixString(16).padLeft(2, '0').toUpperCase()} (${res.lr})';
+      _bleEventLog.add('[${DateTime.now().toIso8601String().substring(11, 23)}] $hexEvent');
+
       switch (notifyIndex) {
-        case 0:
+        case 0x00: // DISPLAY_READY per MentraOS; 0x00 also fires as gesture in some firmware
           if (EvenAI.get.isReceivingAudio) {
             EvenAI.get.recordOverByOS();
           } else if (!EvenAI.get.isRunning) {
@@ -164,25 +172,34 @@ class BleManager {
             App.get.exitAll();
           }
           break;
-        case 1:
+        case 0x01: // SINGLE_TAP / page change
           if (res.lr == 'L') {
             EvenAI.get.lastPageByTouchpad();
           } else {
             EvenAI.get.nextPageByTouchpad();
           }
           break;
-        case 4:
-        case 5:
+        case 0x04: // SILENCED
+        case 0x05: // ACTIVATED
           EvenAI.get.resetSession();
           break;
-        case 23: //BleEvent.evenaiStart:
+        case 0x17: // TRIGGER_FOR_AI — long-press L / "Hey Even"
           EvenAI.get.toStartEvenAIByOS();
           break;
-        case 24: //BleEvent.evenaiRecordOver:
+        case 0x18: // TRIGGER_FOR_STOP_RECORDING
           EvenAI.get.recordOverByOS();
           break;
+        case 0x20: // DOUBLE_TAP per MentraOS (same gesture as 0x00 fallback)
+          if (EvenAI.get.isReceivingAudio) {
+            EvenAI.get.recordOverByOS();
+          } else if (!EvenAI.get.isRunning) {
+            EvenAI.get.toStartEvenAIByOS();
+          } else {
+            App.get.exitAll();
+          }
+          break;
         default:
-          print("Unknown Ble Event: $notifyIndex");
+          print("Unhandled 0xF5 event: 0x${notifyIndex.toRadixString(16).padLeft(2, '0')}");
       }
       return;
     }

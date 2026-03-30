@@ -200,6 +200,22 @@ class Proto {
     }
   }
 
+  /// Send a raw single-byte command to both arms and return the hex responses.
+  /// Used for probing unknown commands (e.g. 0x39, 0x50).
+  static Future<String> probeSend(int cmd) async {
+    final data = Uint8List.fromList([cmd]);
+    final hex = '0x${cmd.toRadixString(16).padLeft(2, '0').toUpperCase()}';
+
+    final retL = await BleManager.request(data, lr: 'L', timeoutMs: 2000);
+    final lResult = retL.isTimeout ? 'timeout' : retL.data.hexString;
+
+    final retR = await BleManager.request(data, lr: 'R', timeoutMs: 2000);
+    final rResult = retR.isTimeout ? 'timeout' : retR.data.hexString;
+
+    print('probeSend $hex  L: $lResult  R: $rResult');
+    return 'L: $lResult\nR: $rResult';
+  }
+
   static List<Uint8List> _getNotifyPackList(
       int cmd, int msgId, Uint8List data) {
     List<Uint8List> send = [];
