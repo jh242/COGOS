@@ -97,33 +97,53 @@ class ClaudeSession {
 
 ### 2. `lib/services/cowork_relay_service.dart` (new)
 
-POST to relay server. Throws `RelayOfflineException` on timeout/connection refused.
+Streams SSE from relay server. Throws `RelayOfflineException` on timeout/connection refused.
 
 ```
 POST <relayUrl>/query
 Headers: Authorization: Bearer <secret>   (if secret configured)
+         Accept: text/event-stream
 Body:    { "message": "...", "session_id": "abc123" | null }
-Response: { "response": "...", "session_id": "abc123" }
+
+SSE response (newline-delimited):
+  data: {"type":"text",    "text":"Hello, here is..."}
+  data: {"type":"text",    "text":" the answer"}
+  data: {"type":"done",    "session_id":"abc123"}
+  data: {"type":"error",   "message":"..."}
 ```
 
-- Reads relay URL and secret token from `shared_preferences`
+Returns a `Stream<String>` of text chunks; session ID extracted from `done` event and written back to `session.relaySessionId`.
+
+- Uses `dio` with `ResponseType.stream` for chunked SSE reception
+- Parses `data:` lines from the raw byte stream
 - If secret is non-empty, adds `Authorization: Bearer <secret>` header
-- 15-second timeout; throws `RelayOfflineException` on any network failure
-- On 401: throws `RelayAuthException` (show "Relay auth failed — check secret token" on glasses)
-- On success: updates `session.relaySessionId` from response
-- Uses `dio` (already a dependency)
+- Connection timeout 10s; throws `RelayOfflineException` on failure
+- On 401: throws `RelayAuthException`
 
 ---
 
 ### 3. `lib/services/api_claude_service.dart` (new)
 
-Direct call to `api.anthropic.com/v1/messages` — used only when relay is offline.
+Direct streaming call to `api.anthropic.com/v1/messages` — used only when relay is offline.
+
+```
+POST https://api.anthropic.com/v1/messages
+Headers: x-api-key, anthropic-version: 2023-06-01, content-type: application/json
+Body: { model, max_tokens, stream: true, system, messages }
+
+SSE response events (relevant subset):
+  event: content_block_delta  → delta.text  (text chunk)
+  event: message_stop         → stream complete
+```
+
+Returns a `Stream<String>` of text deltas — same interface as `CoworkRelayService` so `evenai.dart` handles both identically.
 
 - API key: `const String.fromEnvironment('ANTHROPIC_API_KEY')` with fallback to `shared_preferences`
 - Model: `claude-sonnet-4-6`, `max_tokens`: 1024
-- Passes full `session.messages` list for multi-turn context (capped at `ClaudeSession.maxTurns`)
+- `stream: true` — uses Anthropic SSE streaming
+- Passes `session.messages` for multi-turn context (capped at `ClaudeSession.maxTurns`)
 - System prompt: `"You are a helpful assistant on Even Realities G1 smart glasses. The display shows 5 lines at a time. Be concise. No markdown."`
-- Returns `content[0].text`; on HTTP error returns human-readable string
+- On HTTP error: yields a single error string chunk then closes stream
 
 ---
 
@@ -133,17 +153,21 @@ Minimal Node.js HTTP server (stdlib only, no framework).
 
 ```js
 // POST /query { message, session_id }
-// → spawns: claude -p --output-format json [--resume <session_id>]
+// → spawns: claude -p --output-format stream-json [--resume <session_id>]
 //           with message passed via stdin
-// → parses JSON output for result + session_id
-// → responds: { response, session_id }
+// → forwards text chunks as SSE to Flutter as they arrive
+// → extracts session_id from 'result' event, sends 'done' SSE event
 ```
 
 Key implementation details:
-- Use `child_process.spawn` (not `exec`) — avoids shell injection, handles long output
-- Pass message via **stdin** (not CLI arg) to avoid shell escaping issues
-- Parse `--output-format json` response: `{ result, session_id, ... }`
-- Working directory: `process.env.RELAY_CWD` or `process.cwd()` — Claude has file access to user's project
+- Response: `Content-Type: text/event-stream` (SSE)
+- Use `child_process.spawn` — avoids shell injection, handles long output
+- Pass message via **stdin** to avoid shell escaping issues
+- `--output-format stream-json` produces newline-delimited JSON events as Claude runs:
+  - `{"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}` → forward as `data: {"type":"text","text":"..."}`
+  - `{"type":"result","session_id":"..."}` → forward as `data: {"type":"done","session_id":"..."}` and end response
+  - Tool use/result events are silently consumed (not forwarded — Claude handles them internally)
+- Working directory: `process.env.RELAY_CWD` or `process.cwd()`
 - Port: `process.env.PORT || 9090`
 - Logs startup errors if `claude` is not in PATH
 
@@ -205,9 +229,9 @@ void startListening() {
 **c) Replace DeepSeek API call in `recordOverByOS()` (~line 149):**
 ```dart
 // Dispatch to relay (primary) or direct API (fallback)
-String answer;
+Stream<String> textStream;
 try {
-  answer = await CoworkRelayService().query(combinedText, _session);
+  textStream = CoworkRelayService().queryStream(combinedText, _session);
   _session.isOffline = false;
 } on RelayAuthException {
   startSendReply('Relay auth failed. Check secret token in settings.');
@@ -215,23 +239,64 @@ try {
   return;
 } on RelayOfflineException {
   _session.isOffline = true;
-  answer = await ApiClaudeService().sendChatRequest(combinedText, _session);
+  textStream = ApiClaudeService().streamChatRequest(combinedText, _session);
 }
 
-_session.addUser(combinedText);
-_session.addAssistant(answer);
-saveQuestionItem(combinedText, answer);
-updateDynamicText('$combinedText\n\n$answer');
 isEvenAISyncing.value = false;
-startSendReply(answer);
+final fullAnswer = await startStreamingReply(textStream);
+_session.addUser(combinedText);
+_session.addAssistant(fullAnswer);
+saveQuestionItem(combinedText, fullAnswer);
+updateDynamicText('$combinedText\n\n$fullAnswer');
 ```
 
-**d) Offline indicator in `startSendReply()`:**
+**d) New method `startStreamingReply(Stream<String>)` in `evenai.dart`:**
+
+Accumulates streamed text chunks, measures lines on the UI thread, and sends pages to the glasses progressively. Returns the full assembled answer string when the stream ends.
+
 ```dart
-final tag = _session.isOffline ? '[OFFLINE] ' : '';
-final displayText = tag + text;
-// pass displayText to EvenAIDataMethod.measureStringList()
+Future<String> startStreamingReply(Stream<String> textStream) async {
+  _currentLine = 0;
+  list = [];
+  String accumulated = '';
+  bool firstPageSent = false;
+
+  await for (final chunk in textStream) {
+    if (!isRunning) break;
+    accumulated += chunk;
+
+    // Measure on UI thread — must not be called from an isolate
+    list = EvenAIDataMethod.measureStringList(
+        _session.isOffline ? '[OFFLINE] $accumulated' : accumulated);
+
+    // Send first page as soon as 5 lines are ready
+    if (!firstPageSent && list.length >= 5) {
+      final page = list.sublist(0, 5).map((l) => '$l\n').join();
+      await sendEvenAIReply(page, 0x01, 0x30, 0);
+      firstPageSent = true;
+    }
+  }
+
+  // Stream done — send final state with 0x40 (display complete)
+  if (list.isNotEmpty) {
+    final lastLines = list.length <= 5
+        ? list
+        : list.sublist(list.length - (list.length % 5 == 0 ? 5 : list.length % 5));
+    final lastPage = lastLines.map((l) => '$l\n').join();
+    if (firstPageSent) {
+      await Future.delayed(Duration(seconds: 3));
+    }
+    await sendEvenAIReply(lastPage, 0x01, 0x40, 0);
+  }
+
+  return accumulated;
+}
 ```
+
+**Note:** `EvenAIDataMethod.measureStringList()` is called directly here (UI thread guaranteed since `recordOverByOS` is triggered from a BLE event on the main isolate). The existing timer-based auto-paging (`updateReplyToOSByTimer`) is **not used** for streamed responses — paging is driven by the stream instead.
+
+**e) Offline indicator:**
+Prepend `[OFFLINE] ` to `accumulated` before measuring — handled inline in `startStreamingReply` above.
 
 **e) Add to `clear()`:**
 ```dart
@@ -327,10 +392,11 @@ Memory is fully owned by Claude Code on the desktop:
 
 1. **Double-tap-to-toggle**: double-tap → mic opens → speak → silence for 2s → auto-sends to relay
 2. **Double-tap-to-stop**: double-tap → mic opens → double-tap again → immediately sends (no waiting for silence)
-3. **Relay server**: `curl -X POST localhost:9090/query -d '{"message":"what is 2+2"}' -H 'Content-Type: application/json'` → `{ response: "4", session_id: "..." }`
+3. **Relay server**: `curl -X POST localhost:9090/query -d '{"message":"what is 2+2"}' -H 'Content-Type: application/json' -H 'Accept: text/event-stream'` → SSE stream with `data: {"type":"text",...}` events then `data: {"type":"done","session_id":"..."}`
 4. **Session continuity**: two queries with same `session_id` → second response references first
 5. **Offline fallback**: relay URL pointing at dead port → response has `[OFFLINE]` prefix
 6. **Auth failure**: wrong secret token → glasses show "Relay auth failed", no fallback
 7. **Session reset**: triple-tap → glasses show "Session reset"; next query has no `--resume`
-8. **E2E on device**: tap, say "what files are in this directory", 2s silence → relay running in project root → glasses display file list, no `[OFFLINE]`
-9. **Web search E2E**: tap, say "what is today's weather in London", 2s silence → Claude uses WebSearch → glasses show weather
+8. **Progressive display**: ask a long question → first page appears on glasses before Claude finishes responding; subsequent pages appear as text accumulates
+9. **E2E on device**: tap, say "what files are in this directory", 2s silence → relay running in project root → glasses display file list progressively, no `[OFFLINE]`
+10. **Web search E2E**: tap, say "what is today's weather in London", 2s silence → Claude uses WebSearch → glasses show weather progressively as answer streams in
