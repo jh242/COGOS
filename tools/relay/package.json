@@ -1,0 +1,12 @@
+{
+  "name": "g1-claude-relay",
+  "version": "1.0.0",
+  "description": "Local relay server that bridges the G1 Flutter app to the Claude Code CLI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

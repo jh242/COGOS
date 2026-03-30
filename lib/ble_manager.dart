@@ -156,14 +156,24 @@ class BleManager {
       
       switch (notifyIndex) {
         case 0:
-          App.get.exitAll();
+          if (EvenAI.get.isReceivingAudio) {
+            EvenAI.get.recordOverByOS();
+          } else if (!EvenAI.get.isRunning) {
+            EvenAI.get.toStartEvenAIByOS();
+          } else {
+            App.get.exitAll();
+          }
           break;
-        case 1: 
+        case 1:
           if (res.lr == 'L') {
             EvenAI.get.lastPageByTouchpad();
           } else {
             EvenAI.get.nextPageByTouchpad();
           }
+          break;
+        case 4:
+        case 5:
+          EvenAI.get.resetSession();
           break;
         case 23: //BleEvent.evenaiStart:
           EvenAI.get.toStartEvenAIByOS();

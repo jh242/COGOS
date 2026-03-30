@@ -1,8 +1,6 @@
 // ignore_for_file: library_private_types_in_public_api
 
-import 'package:demo_ai_even/views/features/bmp_page.dart';
-import 'package:demo_ai_even/views/features/notification/notification_page.dart';
-import 'package:demo_ai_even/views/features/text_page.dart';
+import 'package:demo_ai_even/views/settings_page.dart';
 import 'package:flutter/material.dart';
 
 class FeaturesPage extends StatefulWidget {
@@ -25,28 +23,11 @@ class _FeaturesPageState extends State<FeaturesPage> {
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
               GestureDetector(
-                onTap: () async {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const BmpPage()),
-                  );
-                },
-                child: Container(
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text("BMP", style: TextStyle(fontSize: 16)),
-                ),
-              ),
-              GestureDetector(
-                onTap: () async {
+                onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (context) => const NotificationPage()),
+                        builder: (context) => const SettingsPage()),
                   );
                 },
                 child: Container(
@@ -56,33 +37,7 @@ class _FeaturesPageState extends State<FeaturesPage> {
                     borderRadius: BorderRadius.circular(5),
                   ),
                   alignment: Alignment.center,
-                  margin: const EdgeInsets.only(top: 16),
-                  child: const Text(
-                    "Notification",
-                    style: TextStyle(fontSize: 16),
-                  ),
-                ),
-              ),
-              GestureDetector(
-                onTap: () async {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const TextPage()),
-                  );
-                },
-                child: Container(
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  alignment: Alignment.center,
-                  margin: const EdgeInsets.only(top: 16),
-                  child: const Text(
-                    "Text",
-                    style: TextStyle(fontSize: 16),
-                  ),
+                  child: const Text('Settings', style: TextStyle(fontSize: 16)),
                 ),
               ),
             ],

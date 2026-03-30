@@ -1,5 +1,17 @@
 # Plan: G1 Claude Terminal — Core Implementation
 
+## Progress
+
+| Phase | Status | Branch | Notes |
+|-------|--------|--------|-------|
+| **Phase 1 — Core Claude integration** | ✅ Complete | `claude/implement-phase-one-S3kMx` | PR #2 open. All steps 1–9 implemented, reviewed, and fixed. |
+| **Phase 2 — Notification system** | ⬜ Not started | — | `NotificationService`, `notify_model.dart` move, `NotificationSettingsPage`, native wiring |
+| **Phase 3 — Look-Up HUD** | ⬜ Not started | — | Blocked on IMU BLE command discovery; `HudService` stub ready to wire once command is known |
+
+> **Last updated:** 2026-03-30 — Phase 1 complete through commit `870699c`
+
+---
+
 ## Context
 
 The Even Realities G1 glasses app currently calls the DeepSeek API when the user long-presses the left TouchBar. The goal is to replace this with a Claude-powered wearable terminal that routes all queries through a local Claude Code CLI relay on the user's desktop. This gives the glasses real agentic capabilities (web search, file access, bash, session memory) managed by Claude Code itself. A direct Anthropic API fallback is used when the relay is unreachable, with an `[OFFLINE]` indicator on the glasses display.

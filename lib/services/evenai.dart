@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:math';
 import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
-import 'package:demo_ai_even/services/api_services_deepseek.dart';
+import 'package:demo_ai_even/models/claude_session.dart';
+import 'package:demo_ai_even/services/api_claude_service.dart';
+import 'package:demo_ai_even/services/cowork_relay_service.dart';
 import 'package:demo_ai_even/services/proto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,7 +35,7 @@ class EvenAI {
   Timer? _recordingTimer;
   final int maxRecordingDuration = 30; // todo
 
-  static bool _isManual = false; 
+  static bool _isManual = false;
 
   static set isRunning(bool value) {
     _isRunning = value;
@@ -57,6 +59,14 @@ class EvenAI {
 
   String combinedText = '';
 
+  final ClaudeSession _session = ClaudeSession();
+  Timer? _silenceTimer;
+  DateTime _lastTranscriptChange = DateTime.now();
+  int silenceThresholdSecs = 2;
+  String _streamAccumulated = '';
+  bool _streamSendInFlight = false;
+  Timer? _streamDebounce;
+
   static final StreamController<String> _textStreamController = StreamController<String>.broadcast();
   static Stream<String> get textStream => _textStreamController.stream;
 
@@ -68,11 +78,28 @@ class EvenAI {
 
   void startListening() {
     combinedText = '';
+    _lastTranscriptChange = DateTime.now();
+
     _eventSpeechRecognizeChannel.listen((event) {
-      var txt = event["script"] as String;
-      combinedText = txt;
+      final txt = event['script'] as String;
+      if (txt != combinedText) {
+        combinedText = txt;
+        _lastTranscriptChange = DateTime.now();
+      }
     }, onError: (error) {
-      print("Error in event: $error");
+      print('Error in event: $error');
+    });
+
+    _silenceTimer?.cancel();
+    _silenceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!isReceivingAudio) return;
+      final elapsed =
+          DateTime.now().difference(_lastTranscriptChange).inSeconds;
+      if (elapsed >= silenceThresholdSecs && combinedText.isNotEmpty) {
+        _silenceTimer?.cancel();
+        _silenceTimer = null;
+        recordOverByOS();
+      }
     });
   }
 
@@ -81,7 +108,7 @@ class EvenAI {
     // restart to avoid ble data conflict
     BleManager.get().startSendBeatHeart();
 
-    startListening(); 
+    startListening();
     
     // avoid duplicate ble command in short time, especially android
     int currentTime = DateTime.now().millisecondsSinceEpoch;
@@ -123,37 +150,103 @@ class EvenAI {
     print('${DateTime.now()} EvenAI -------recordOverByOS-------');
 
     int currentTime = DateTime.now().millisecondsSinceEpoch;
-    if (currentTime - _lastStopTime < stopTimeGap) {
-      return;
-    }
+    if (currentTime - _lastStopTime < stopTimeGap) return;
     _lastStopTime = currentTime;
 
     isReceivingAudio = false;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
     _recordingTimer?.cancel();
     _recordingTimer = null;
 
-    await BleManager.invokeMethod("stopEvenAI");
-    await Future.delayed(Duration(seconds: 2)); // todo
+    await BleManager.invokeMethod('stopEvenAI');
+    await Future.delayed(const Duration(seconds: 2));
 
-    print("recordOverByOS----startSendReply---pre------combinedText-------*$combinedText*---");
+    print('recordOverByOS combinedText: *$combinedText*');
 
     if (combinedText.isEmpty) {
-      
-      updateDynamicText("No Speech Recognized");
+      updateDynamicText('No Speech Recognized');
       isEvenAISyncing.value = false;
-      startSendReply("No Speech Recognized");
+      startSendReply('No Speech Recognized');
       return;
     }
 
-    final apiService = ApiDeepSeekService();
-    String answer = await apiService.sendChatRequest(combinedText);
-  
-    print("recordOverByOS----startSendReply---combinedText-------*$combinedText*-----answer----$answer----");
+    String fullAnswer;
+    try {
+      final relayStream =
+          CoworkRelayService().queryStream(combinedText, _session);
+      _session.isOffline = false;
+      fullAnswer = await startStreamingReply(relayStream);
+    } on RelayAuthException {
+      isEvenAISyncing.value = false;
+      startSendReply('Relay auth failed. Check secret token in settings.');
+      return;
+    } on RelayOfflineException {
+      _session.isOffline = true;
+      final claudeStream =
+          ApiClaudeService().streamChatRequest(combinedText, _session);
+      fullAnswer = await startStreamingReply(claudeStream);
+    }
 
-    updateDynamicText("$combinedText\n\n$answer");
     isEvenAISyncing.value = false;
-    saveQuestionItem(combinedText, answer);
-    startSendReply(answer);
+    _session.addUser(combinedText);
+    _session.addAssistant(fullAnswer);
+    _session.lastQuery = combinedText;
+    _session.lastAnswer = fullAnswer;
+    saveQuestionItem(combinedText, fullAnswer);
+    updateDynamicText('$combinedText\n\n$fullAnswer');
+  }
+
+  Future<String> startStreamingReply(Stream<String> textStream) async {
+    _streamAccumulated = '';
+    _streamSendInFlight = false;
+
+    final prefix = _session.isOffline ? '[OFFLINE] ' : '';
+
+    await for (final chunk in textStream) {
+      if (!isRunning) break; // user exited; startSendReply below is a safe no-op
+      _streamAccumulated += chunk;
+
+      _streamDebounce?.cancel();
+      _streamDebounce = Timer(const Duration(milliseconds: 250), () {
+        if (_streamSendInFlight) return;
+        _streamSendInFlight = true;
+
+        final displayText = prefix + _streamAccumulated;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!isRunning) {
+            _streamSendInFlight = false;
+            return;
+          }
+          final lines = EvenAIDataMethod.measureStringList(displayText);
+          final last5 =
+              lines.length > 5 ? lines.sublist(lines.length - 5) : lines;
+          final screen = last5.map((l) => '$l\n').join();
+          await sendEvenAIReply(screen, 0x01, 0x70, 0);
+          _streamSendInFlight = false;
+        });
+      });
+    }
+
+    _streamDebounce?.cancel();
+    _streamDebounce = null;
+
+    final finalText = prefix + _streamAccumulated;
+    await startSendReply(finalText);
+
+    return _streamAccumulated;
+  }
+
+  Future<void> sendHudText(String text) async {
+    final lines = EvenAIDataMethod.measureStringList(text);
+    final first5 = lines.length > 5 ? lines.sublist(0, 5) : lines;
+    final screen = first5.map((l) => '$l\n').join();
+    await sendEvenAIReply(screen, 0x01, 0x70, 0);
+  }
+
+  void resetSession() {
+    _session.reset();
+    startSendReply('Session reset');
   }
 
   void saveQuestionItem(String title, String content) {
@@ -163,34 +256,12 @@ class EvenAI {
   }
 
   int getTotalPages() {
-    if (list.isEmpty) {
-      return 0;
-    }
-    if (list.length < 6) {
-      return 1;
-    }
-    int pages = 0;
-    int div = list.length ~/ 5;
-    int rest = list.length % 5;
-    pages = div;
-    if (rest != 0) {
-      pages++;
-    }
-    return pages;
+    if (list.isEmpty) return 0;
+    return (list.length + 4) ~/ 5;
   }
 
   int getCurrentPage() {
-    if (_currentLine == 0) {
-      return 1;
-    }
-    int currentPage = 1;
-    int div = _currentLine ~/ 5;
-    int rest = _currentLine % 5;
-    currentPage = 1 + div;
-    if (rest != 0) {
-      currentPage++;
-    }
-    return currentPage;
+    return (_currentLine ~/ 5) + 1;
   }
 
   Future sendNetworkErrorReply(String text) async {
@@ -353,7 +424,7 @@ class EvenAI {
     }
 
     if (_currentLine - 5 < 0) {
-      _currentLine == 0;
+      _currentLine = 0;
     } else {
       _currentLine -= 5;
     }
@@ -426,13 +497,19 @@ class EvenAI {
     _recordingTimer = null;
     _timer?.cancel();
     _timer = null;
-    audioDataBuffer.clear();
     audioDataBuffer = [];
     audioData = null;
     list = [];
     sendReplys = [];
     durationS = 0;
     retryCount = 0;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
+    _streamDebounce?.cancel();
+    _streamDebounce = null;
+    _streamAccumulated = '';
+    _streamSendInFlight = false;
+    _session.reset();
   }
 
   Future openEvenAIMic() async {
