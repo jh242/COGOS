@@ -9,6 +9,7 @@ The Even Realities G1 glasses app currently calls the DeepSeek API when the user
 - The Claude Agent SDK is Python/TypeScript only — cannot embed in Flutter
 - `claude -p --resume <session_id>` is the programmatic interface that handles its own session memory
 - One unified mode (no mode switching) — Claude decides which tools to use per query
+- No phone-side wake word filter — "Hey Even" hardware trigger or tap-to-toggle handles activation
 
 ---
 
@@ -26,6 +27,39 @@ The relay server runs on the user's desktop, in the CWD of their project. Claude
 
 ---
 
+## Activation: Tap-to-Toggle
+
+Rather than hold-to-talk (hold bar while speaking), the app uses **tap-to-toggle** with **auto-stop on silence**:
+
+```
+IDLE ──[tap]──► RECORDING ──[tap OR silence timeout]──► THINKING ──[answer ready]──► DISPLAYING
+                                  └──[30s max]──────────────────────────────────────────────┘
+DISPLAYING ──[tap L]──► prev page
+DISPLAYING ──[tap R]──► next page
+DISPLAYING / any state ──[double-tap]──► IDLE
+IDLE / DISPLAYING ──[triple-tap]──► reset session
+```
+
+"Hey Even" hardware wake word (built into G1 firmware) fires `0xF5 0x17` — same as long-press — so it also activates recording without any phone-side filtering.
+
+### Silence auto-stop
+
+Inside `startListening()`, a periodic timer watches `combinedText` for changes. If no new words arrive for `silenceThresholdSecs` (default: 2s) AND the transcript is non-empty, `recordOverByOS()` is called automatically:
+
+```dart
+_lastTranscriptChange = DateTime.now();
+_silenceTimer = Timer.periodic(Duration(seconds: 1), (_) {
+  if (!isReceivingAudio) { _silenceTimer?.cancel(); return; }
+  final silent = DateTime.now().difference(_lastTranscriptChange).inSeconds;
+  if (silent >= silenceThresholdSecs && combinedText.isNotEmpty) {
+    _silenceTimer?.cancel();
+    recordOverByOS();
+  }
+});
+```
+
+---
+
 ## Files to Create / Modify
 
 | File | Action | Purpose |
@@ -33,9 +67,9 @@ The relay server runs on the user's desktop, in the CWD of their project. Claude
 | `lib/services/cowork_relay_service.dart` | **CREATE** | HTTP client for the desktop relay |
 | `lib/services/api_claude_service.dart` | **CREATE** | Fallback direct Anthropic API client |
 | `lib/models/claude_session.dart` | **CREATE** | Holds relay session ID + offline flag |
-| `lib/services/evenai.dart` | **MODIFY** | Replace DeepSeek, add wake word, dispatch to relay/fallback |
-| `lib/ble_manager.dart` | **MODIFY** | Triple-tap → reset session (instead of mode cycle) |
-| `lib/views/settings_page.dart` | **CREATE** | API key, relay URL, secret token, wake phrases config |
+| `lib/services/evenai.dart` | **MODIFY** | Replace DeepSeek, tap-to-toggle, silence detection, dispatch |
+| `lib/ble_manager.dart` | **MODIFY** | Tap = state-aware toggle; triple-tap = reset session |
+| `lib/views/settings_page.dart` | **CREATE** | API key, relay URL, secret token config |
 | `tools/relay/server.js` | **CREATE** | Node.js relay: spawns `claude -p` subprocess |
 | `pubspec.yaml` | **MODIFY** | Add `shared_preferences: ^2.3.0` |
 
@@ -107,10 +141,9 @@ Minimal Node.js HTTP server (stdlib only, no framework).
 
 Key implementation details:
 - Use `child_process.spawn` (not `exec`) — avoids shell injection, handles long output
-- Pass message via **stdin** (not CLI arg) to avoid shell escaping issues:
-  `spawn('claude', ['-p', '--output-format', 'json', '--resume', sid], { stdin: message })`
+- Pass message via **stdin** (not CLI arg) to avoid shell escaping issues
 - Parse `--output-format json` response: `{ result, session_id, ... }`
-- Working directory: `process.env.RELAY_CWD` or `process.cwd()` — so Claude has file access to the user's project
+- Working directory: `process.env.RELAY_CWD` or `process.cwd()` — Claude has file access to user's project
 - Port: `process.env.PORT || 9090`
 - Logs startup errors if `claude` is not in PATH
 
@@ -128,7 +161,7 @@ Key implementation details:
 | Tailscale | Install + `100.x.x.x:9090` | Stable hostname, no open port | Requires Tailscale on phone too |
 | VPS | Deploy to Fly.io / Railway | Always on | Requires server + Claude Code on VPS |
 
-Recommended for most users: **Cloudflare Tunnel** (free, stable subdomain that doesn't change on restart).
+Recommended: **Cloudflare Tunnel** (free, stable subdomain that doesn't change on restart).
 
 `tools/relay/package.json`: minimal, no dependencies.
 
@@ -136,81 +169,78 @@ Recommended for most users: **Cloudflare Tunnel** (free, stable subdomain that d
 
 ### 5. `lib/services/evenai.dart` (modify)
 
-**a) Add session state and wake word config (class fields):**
+**a) Add session + silence detection state (class fields):**
 ```dart
 final ClaudeSession _session = ClaudeSession();
-
-// read from shared_preferences at startup
-List<String> _wakePhrases = ['hey claude', 'ok claude', 'claude'];
-bool _requireWakeWord = true;
+Timer? _silenceTimer;
+DateTime _lastTranscriptChange = DateTime.now();
+static const int silenceThresholdSecs = 2;
 ```
 
-**b) Wake word detection — add private helpers:**
+**b) Update `startListening()` — add silence auto-stop:**
 ```dart
-bool _hasWakeWord(String text) =>
-    _wakePhrases.any((w) => text.toLowerCase().contains(w));
-
-String _stripWakeWord(String text) {
-  final lower = text.toLowerCase();
-  for (final w in _wakePhrases) {
-    if (lower.contains(w)) {
-      final idx = lower.indexOf(w);
-      return text.substring(idx + w.length).trim();
+void startListening() {
+  combinedText = '';
+  _lastTranscriptChange = DateTime.now();
+  _eventSpeechRecognizeChannel.listen((event) {
+    final txt = event["script"] as String;
+    if (txt != combinedText) {
+      combinedText = txt;
+      _lastTranscriptChange = DateTime.now();
     }
-  }
-  return text;
+  }, onError: (error) => print("Error in event: $error"));
+
+  _silenceTimer?.cancel();
+  _silenceTimer = Timer.periodic(Duration(seconds: 1), (_) {
+    if (!isReceivingAudio) { _silenceTimer?.cancel(); return; }
+    final silent = DateTime.now().difference(_lastTranscriptChange).inSeconds;
+    if (silent >= silenceThresholdSecs && combinedText.isNotEmpty) {
+      _silenceTimer?.cancel();
+      recordOverByOS();
+    }
+  });
 }
 ```
 
 **c) Replace DeepSeek API call in `recordOverByOS()` (~line 149):**
 ```dart
-// Wake word gate
-if (_requireWakeWord && !_hasWakeWord(combinedText)) {
-  startSendReply('Say "Hey Claude" to start');
-  isEvenAISyncing.value = false;
-  return;
-}
-final query = _stripWakeWord(combinedText);
-
-// Dispatch
+// Dispatch to relay (primary) or direct API (fallback)
 String answer;
 try {
-  answer = await CoworkRelayService().query(query, _session);
+  answer = await CoworkRelayService().query(combinedText, _session);
   _session.isOffline = false;
 } on RelayAuthException {
-  // Don't fall back — auth failure is a config error, not a connectivity issue
   startSendReply('Relay auth failed. Check secret token in settings.');
   isEvenAISyncing.value = false;
   return;
 } on RelayOfflineException {
   _session.isOffline = true;
-  answer = await ApiClaudeService().sendChatRequest(query, _session);
+  answer = await ApiClaudeService().sendChatRequest(combinedText, _session);
 }
 
-_session.addUser(query);
+_session.addUser(combinedText);
 _session.addAssistant(answer);
-
-// Store in history UI (existing)
-saveQuestionItem(query, answer);
-updateDynamicText('$query\n\n$answer');
+saveQuestionItem(combinedText, answer);
+updateDynamicText('$combinedText\n\n$answer');
 isEvenAISyncing.value = false;
 startSendReply(answer);
 ```
 
 **d) Offline indicator in `startSendReply()`:**
 ```dart
-// Prepend status tag before measureStringList
 final tag = _session.isOffline ? '[OFFLINE] ' : '';
 final displayText = tag + text;
-// pass displayText (not text) to EvenAIDataMethod.measureStringList()
+// pass displayText to EvenAIDataMethod.measureStringList()
 ```
 
-**e) Reset session in `clear()`:**
+**e) Add to `clear()`:**
 ```dart
-_session.reset();  // add this line
+_session.reset();
+_silenceTimer?.cancel();
+_silenceTimer = null;
 ```
 
-**f) Add `resetSession()` public method (for triple-tap):**
+**f) Add `resetSession()` (for triple-tap):**
 ```dart
 void resetSession() {
   _session.reset();
@@ -222,13 +252,27 @@ void resetSession() {
 
 ### 6. `lib/ble_manager.dart` (modify)
 
-Triple-tap events (cases 4 & 5) currently fall through to the `default` print. Update:
-
+**`case 1:` becomes state-aware** (single tap):
 ```dart
-case 4: // triple-tap left — reset Claude session
-  EvenAI.get.resetSession();
+case 1:
+  if (EvenAI.get.isReceivingAudio) {
+    // tap while recording → stop and send
+    EvenAI.get.recordOverByOS();
+  } else if (!EvenAI.get.isRunning) {
+    // tap while idle → start recording
+    EvenAI.get.toStartEvenAIByOS();
+  } else {
+    // tap while displaying result → page navigation (existing)
+    if (res.lr == 'L') EvenAI.get.lastPageByTouchpad();
+    else EvenAI.get.nextPageByTouchpad();
+  }
   break;
-case 5: // triple-tap right — reset Claude session (either side works)
+```
+
+**Triple-tap (cases 4 & 5):**
+```dart
+case 4:
+case 5:
   EvenAI.get.resetSession();
   break;
 ```
@@ -244,12 +288,11 @@ Simple `StatefulWidget` reachable from `FeaturesPage`. All values persisted via 
 | Anthropic API key | Password text field | env var |
 | Relay URL | Text field | `http://localhost:9090` |
 | Relay secret token | Password text field | _(empty = no auth)_ |
-| Require wake word | Switch | `true` |
-| Wake phrases | Text field (comma-separated) | `hey claude, ok claude, claude` |
+| Silence threshold (s) | Slider 1–5 | `2` |
 
 On save: update `shared_preferences` + reload values in `EvenAI` instance.
 
-**Relay URL can be any HTTP/HTTPS URL** — localhost for home use, or a public tunnel URL (ngrok, Cloudflare Tunnel) when away from the desktop.
+**Relay URL can be any HTTP/HTTPS URL** — localhost for home use, or a public tunnel URL when away.
 
 ---
 
@@ -259,17 +302,6 @@ On save: update `shared_preferences` + reload values in `EvenAI` instance.
 dependencies:
   shared_preferences: ^2.3.0   # add this line
 ```
-
----
-
-## Wake Word Approach
-
-STT prefix/contains match against `combinedText` (set by native speech layer).
-- No on-device keyword spotting plugin needed — simpler, no native code
-- Fires after TouchBar release (full transcript available)
-- Acceptable for the glasses UX since the user is already holding the TouchBar while speaking
-- Default: `['hey claude', 'ok claude', 'claude']`
-- Strip the matched phrase before sending to relay
 
 ---
 
@@ -286,11 +318,12 @@ Memory is fully owned by Claude Code on the desktop:
 
 ## Verification
 
-1. **Relay server**: `curl -X POST localhost:9090/query -d '{"message":"what is 2+2"}' -H 'Content-Type: application/json'` → returns `{ response: "4", session_id: "..." }`
-2. **Session continuity**: send two queries to relay with same `session_id` → second response references context from first
-3. **Wake word**: unit test `_hasWakeWord("hey claude what time is it")` == true; `_stripWakeWord("hey claude what time is it")` == `"what time is it"`
-4. **Offline fallback**: point relay URL at a dead port, trigger query → response has `[OFFLINE]` prefix, came from direct API
-5. **Auth failure**: set wrong secret token, trigger query → glasses show "Relay auth failed" and no fallback occurs
-6. **Session reset**: triple-tap left → glasses show "Session reset"; next query starts fresh (no `--resume` in relay call)
-7. **E2E on device**: connect G1, long-press, say "Hey Claude, what files are in this directory", relay running in project root → glasses display files list with no `[OFFLINE]` tag
-8. **Web search E2E**: say "Hey Claude, what is today's weather in London" → Claude Code uses WebSearch tool, glasses show current weather
+1. **Tap-to-toggle**: tap once → mic opens → speak → silence for 2s → auto-sends to relay
+2. **Tap-to-stop**: tap once → mic opens → tap again → immediately sends (no waiting for silence)
+3. **Relay server**: `curl -X POST localhost:9090/query -d '{"message":"what is 2+2"}' -H 'Content-Type: application/json'` → `{ response: "4", session_id: "..." }`
+4. **Session continuity**: two queries with same `session_id` → second response references first
+5. **Offline fallback**: relay URL pointing at dead port → response has `[OFFLINE]` prefix
+6. **Auth failure**: wrong secret token → glasses show "Relay auth failed", no fallback
+7. **Session reset**: triple-tap → glasses show "Session reset"; next query has no `--resume`
+8. **E2E on device**: tap, say "what files are in this directory", 2s silence → relay running in project root → glasses display file list, no `[OFFLINE]`
+9. **Web search E2E**: tap, say "what is today's weather in London", 2s silence → Claude uses WebSearch → glasses show weather
