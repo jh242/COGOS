@@ -60,16 +60,25 @@ _silenceTimer = Timer.periodic(Duration(seconds: 1), (_) {
 
 ---
 
-## Files to Delete
+## Files to Delete / Archive
+
+**Delete** (no future value):
 
 | File | Reason |
 |------|--------|
-| `lib/controllers/bmp_update_manager.dart` | BMP feature removed |
-| `lib/services/features_services.dart` | BMP feature removed |
 | `lib/services/text_service.dart` | Manual text send removed |
-| `lib/views/features/bmp_page.dart` | BMP feature removed |
 | `lib/views/features/text_page.dart` | Manual text send removed |
 | `lib/views/features/notification/notification_page.dart` | Replaced by real notification system |
+
+**Archive to `docs/reference/bmp/`** (keep for future custom display graphics):
+
+| File | Destination |
+|------|-------------|
+| `lib/controllers/bmp_update_manager.dart` | `docs/reference/bmp/bmp_update_manager.dart` |
+| `lib/services/features_services.dart` | `docs/reference/bmp/features_services.dart` |
+| `lib/views/features/bmp_page.dart` | `docs/reference/bmp/bmp_page.dart` |
+
+The BMP protocol (1-bit 576×136px images, 194-byte packets, CRC32Xz big-endian, dual-BLE simultaneous send) is the foundation for any future custom waveguide graphics. `BmpUpdateManager` handles the full send sequence including the storage address prefix on the first packet and the `0x20 0x0d 0x0e` end command.
 
 ---
 
