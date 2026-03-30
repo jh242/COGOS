@@ -5,10 +5,10 @@
 | Phase | Status | Branch | Notes |
 |-------|--------|--------|-------|
 | **Phase 1 — Core Claude integration** | ✅ Complete | `claude/implement-phase-one-S3kMx` | PR #2 open. All steps 1–9 implemented, reviewed, and fixed. |
-| **Phase 2 — Notification system** | ⬜ Not started | — | `NotificationService`, `notify_model.dart` move, `NotificationSettingsPage`, native wiring |
+| **Phase 2 — Notification system** | ✅ Complete | `claude/implement-plan-phase-NhPkO` | `NotificationService`, `notify_model.dart` moved, `NotificationSettingsPage`, startup wiring |
 | **Phase 3 — Look-Up HUD** | ⬜ Not started | — | Blocked on IMU BLE command discovery; `HudService` stub ready to wire once command is known |
 
-> **Last updated:** 2026-03-30 — Phase 1 complete through commit `870699c`
+> **Last updated:** 2026-03-30 — Phase 2 complete
 
 ---
 
