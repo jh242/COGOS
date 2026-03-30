@@ -1,19 +1,63 @@
 
-# Even Demo
+# G1 Claude Terminal
 
-## Even AI
-The general process of the Even AI function is as follows: After the app and glasses are 
-connected via dual Bluetooth, long press the left-side TouchBar on the glasses to enter the 
-Even AI activation state. At this point, the app will receive the [0xF5, 0x17] command from the 
-glasses. The app then needs to send a command [0x0E, 0x01] to the glasses to activate the 
-right-side microphone for recording. Once the microphone is successfully activated, the app 
-will receive a real-time audio stream in LC3 format. Keep pressing until speaking is finished, 
-the maximum supported recording duration is 30 seconds. After the recording is finished, the 
-app needs to convert the audio stream into text, which is then sent to the large model for a 
-response. After the app successfully obtains the response from the large model, it can send 
-the result to the glasses according to the Bluetooth protocol. By default, the result is 
-transmitted automatically, page by page. During transmission, a single tap on the TouchBar 
-will switch to manual mode, with the left-side TouchBar used for page-up and the right-side 
+A Flutter app that turns the **Even Realities G1 smart glasses** into a
+wearable Claude terminal — voice-activated, hands-free, always available.
+
+## Quick Start
+
+```bash
+flutter run --dart-define=ANTHROPIC_API_KEY=sk-ant-... -d <device>
+```
+
+## Usage
+
+| Gesture | Action |
+|---------|--------|
+| Long-press left TouchBar | Start recording — say "Hey Claude, ..." |
+| Release | Send to Claude, display response |
+| Single tap right | Next page |
+| Single tap left | Previous page |
+| Triple-tap left | Cycle mode: Chat → Code → Cowork |
+| Triple-tap right | New cowork session |
+| Double-tap | Exit |
+
+### Modes
+
+- **[CHAT]** — General conversation, concise answers
+- **[CODE]** — Programming assistant, plain-text code output
+- **[WORK]** — Cowork mode: persistent multi-turn session bridged to Claude Code
+
+## Architecture
+
+```
+G1 Glasses  ──dual BLE──  Flutter App (phone)  ──HTTPS──  Claude API
+                                  │
+                              (cowork mode)
+                                  │
+                           Claude Code relay
+                           (localhost:9090)
+```
+
+See `PLAN.md` for the full implementation plan and `CLAUDE.md` for
+codebase context.
+
+---
+
+## Even AI (original protocol documentation)
+
+The general process of the Even AI function is as follows: After the app and glasses are
+connected via dual Bluetooth, long press the left-side TouchBar on the glasses to enter the
+Even AI activation state. At this point, the app will receive the [0xF5, 0x17] command from the
+glasses. The app then needs to send a command [0x0E, 0x01] to the glasses to activate the
+right-side microphone for recording. Once the microphone is successfully activated, the app
+will receive a real-time audio stream in LC3 format. Keep pressing until speaking is finished,
+the maximum supported recording duration is 30 seconds. After the recording is finished, the
+app needs to convert the audio stream into text, which is then sent to the large model for a
+response. After the app successfully obtains the response from the large model, it can send
+the result to the glasses according to the Bluetooth protocol. By default, the result is
+transmitted automatically, page by page. During transmission, a single tap on the TouchBar
+will switch to manual mode, with the left-side TouchBar used for page-up and the right-side
 TouchBar for page-down. A double-tap on the TouchBar will directly exit the Even AI function.
 
 
