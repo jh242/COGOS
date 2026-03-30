@@ -252,51 +252,73 @@ updateDynamicText('$combinedText\n\n$fullAnswer');
 
 **d) New method `startStreamingReply(Stream<String>)` in `evenai.dart`:**
 
-Accumulates streamed text chunks, measures lines on the UI thread, and sends pages to the glasses progressively. Returns the full assembled answer string when the stream ends.
+**Phase 1 — Live streaming (typewriter effect):**
+Accumulates chunks and updates the glasses display every ~250ms with the **last 5 lines** of accumulated text. The user sees text appearing and scrolling in real time. No paging during this phase — it's a live window into the current response tail.
+
+A debounce timer + in-flight flag prevents BLE queue buildup (BLE round-trip is ~400-500ms, so we skip an update if the previous one hasn't completed):
 
 ```dart
+String _streamAccumulated = '';
+bool _streamSendInFlight = false;
+Timer? _streamDebounce;
+
 Future<String> startStreamingReply(Stream<String> textStream) async {
   _currentLine = 0;
   list = [];
-  String accumulated = '';
-  bool firstPageSent = false;
+  _streamAccumulated = '';
+  _streamSendInFlight = false;
 
   await for (final chunk in textStream) {
     if (!isRunning) break;
-    accumulated += chunk;
+    _streamAccumulated += chunk;
 
-    // Measure on UI thread — must not be called from an isolate
-    list = EvenAIDataMethod.measureStringList(
-        _session.isOffline ? '[OFFLINE] $accumulated' : accumulated);
+    // Debounce: schedule a display update 250ms after last chunk
+    _streamDebounce?.cancel();
+    _streamDebounce = Timer(Duration(milliseconds: 250), () async {
+      if (_streamSendInFlight || !isRunning) return;
+      _streamSendInFlight = true;
 
-    // Send first page as soon as 5 lines are ready
-    if (!firstPageSent && list.length >= 5) {
-      final page = list.sublist(0, 5).map((l) => '$l\n').join();
-      await sendEvenAIReply(page, 0x01, 0x30, 0);
-      firstPageSent = true;
-    }
+      final tag = _session.isOffline ? '[OFFLINE] ' : '';
+      // Must run on UI thread — safe here (main isolate)
+      final lines = EvenAIDataMethod.measureStringList(
+          tag + _streamAccumulated);
+
+      // Always show the LAST 5 lines — typewriter scrolling effect
+      final tail = lines.length <= 5 ? lines : lines.sublist(lines.length - 5);
+      final display = tail.map((l) => '$l\n').join();
+      await sendEvenAIReply(display, 0x01, 0x30, 0);
+
+      _streamSendInFlight = false;
+    });
   }
 
-  // Stream done — send final state with 0x40 (display complete)
-  if (list.isNotEmpty) {
-    final lastLines = list.length <= 5
-        ? list
-        : list.sublist(list.length - (list.length % 5 == 0 ? 5 : list.length % 5));
-    final lastPage = lastLines.map((l) => '$l\n').join();
-    if (firstPageSent) {
-      await Future.delayed(Duration(seconds: 3));
-    }
-    await sendEvenAIReply(lastPage, 0x01, 0x40, 0);
+  // Wait for any pending debounce to fire and complete
+  _streamDebounce?.cancel();
+  _streamDebounce = null;
+  while (_streamSendInFlight) {
+    await Future.delayed(Duration(milliseconds: 50));
   }
 
-  return accumulated;
+  // Phase 2 — stream done: hand off to normal paginated display
+  final tag = _session.isOffline ? '[OFFLINE] ' : '';
+  list = EvenAIDataMethod.measureStringList(tag + _streamAccumulated);
+  await startSendReply(tag + _streamAccumulated); // existing paging logic
+  return _streamAccumulated;
 }
 ```
 
-**Note:** `EvenAIDataMethod.measureStringList()` is called directly here (UI thread guaranteed since `recordOverByOS` is triggered from a BLE event on the main isolate). The existing timer-based auto-paging (`updateReplyToOSByTimer`) is **not used** for streamed responses — paging is driven by the stream instead.
+**Phase 2 — Paginated review:**
+After streaming ends, `startSendReply()` (existing method) takes over with the full response text. The user can now navigate pages with single-tap L/R. This reuses all existing pagination logic unchanged.
 
-**e) Offline indicator:**
-Prepend `[OFFLINE] ` to `accumulated` before measuring — handled inline in `startStreamingReply` above.
+**Note:** `EvenAIDataMethod.measureStringList()` is called on the main isolate throughout — safe because `recordOverByOS` is always invoked from a BLE event on the main thread, and `await for` preserves the zone.
+
+**e) Add to `clear()`:**
+```dart
+_streamDebounce?.cancel();
+_streamDebounce = null;
+_streamSendInFlight = false;
+_streamAccumulated = '';
+```
 
 **e) Add to `clear()`:**
 ```dart
@@ -397,6 +419,6 @@ Memory is fully owned by Claude Code on the desktop:
 5. **Offline fallback**: relay URL pointing at dead port → response has `[OFFLINE]` prefix
 6. **Auth failure**: wrong secret token → glasses show "Relay auth failed", no fallback
 7. **Session reset**: triple-tap → glasses show "Session reset"; next query has no `--resume`
-8. **Progressive display**: ask a long question → first page appears on glasses before Claude finishes responding; subsequent pages appear as text accumulates
+8. **Live streaming display**: ask a long question → text appears word by word on glasses (debounced at 250ms); last 5 lines always visible, older lines scroll off; after stream ends switches to full paginated view
 9. **E2E on device**: tap, say "what files are in this directory", 2s silence → relay running in project root → glasses display file list progressively, no `[OFFLINE]`
 10. **Web search E2E**: tap, say "what is today's weather in London", 2s silence → Claude uses WebSearch → glasses show weather progressively as answer streams in
