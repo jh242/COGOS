@@ -3,9 +3,15 @@ const { spawn } = require('child_process');
 
 const PORT = process.env.PORT || 9090;
 const RELAY_SECRET = process.env.RELAY_SECRET || '';
-const RELAY_CWD = process.env.RELAY_CWD || undefined;
+const RELAY_CWD = process.env.RELAY_CWD || undefined;  // intentional: empty string treated as unset
 
 const server = http.createServer((req, res) => {
+  if (req.method !== 'POST' || req.url !== '/query') {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+
   if (RELAY_SECRET) {
     const auth = req.headers['authorization'] || '';
     if (auth !== `Bearer ${RELAY_SECRET}`) {
@@ -13,12 +19,6 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: 'Unauthorized' }));
       return;
     }
-  }
-
-  if (req.method !== 'POST' || req.url !== '/query') {
-    res.writeHead(404);
-    res.end();
-    return;
   }
 
   let body = '';
@@ -61,11 +61,12 @@ const server = http.createServer((req, res) => {
     });
 
     let stdoutBuf = '';
-    child.stdout.on('data', (chunk) => {
-      stdoutBuf += chunk.toString();
-      const lines = stdoutBuf.split('\n');
-      stdoutBuf = lines.pop();
+    let childAlive = true;
 
+    function processLines(flush = false) {
+      const lines = stdoutBuf.split('\n');
+      // On flush consume everything; otherwise hold the last element as a partial line.
+      stdoutBuf = flush ? '' : lines.pop();
       for (const line of lines) {
         if (!line.trim()) continue;
         let event;
@@ -85,6 +86,11 @@ const server = http.createServer((req, res) => {
           res.write(`data: ${JSON.stringify({ type: 'done', session_id: event.session_id })}\n\n`);
         }
       }
+    }
+
+    child.stdout.on('data', (chunk) => {
+      stdoutBuf += chunk.toString();
+      processLines();
     });
 
     child.stderr.on('data', (chunk) => {
@@ -92,6 +98,9 @@ const server = http.createServer((req, res) => {
     });
 
     child.on('close', (code) => {
+      childAlive = false;
+      // Flush any partial line that arrived without a trailing newline.
+      if (stdoutBuf.trim()) processLines(true);
       if (code !== 0) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: `claude exited with code ${code}` })}\n\n`);
       }
@@ -99,12 +108,13 @@ const server = http.createServer((req, res) => {
     });
 
     child.on('error', (err) => {
+      childAlive = false;
       res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
       res.end();
     });
 
     req.on('close', () => {
-      child.kill();
+      if (childAlive) child.kill();
     });
   });
 });

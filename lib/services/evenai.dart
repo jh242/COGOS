@@ -35,7 +35,7 @@ class EvenAI {
   Timer? _recordingTimer;
   final int maxRecordingDuration = 30; // todo
 
-  static bool _isManual = false; 
+  static bool _isManual = false;
 
   static set isRunning(bool value) {
     _isRunning = value;
@@ -256,34 +256,12 @@ class EvenAI {
   }
 
   int getTotalPages() {
-    if (list.isEmpty) {
-      return 0;
-    }
-    if (list.length < 6) {
-      return 1;
-    }
-    int pages = 0;
-    int div = list.length ~/ 5;
-    int rest = list.length % 5;
-    pages = div;
-    if (rest != 0) {
-      pages++;
-    }
-    return pages;
+    if (list.isEmpty) return 0;
+    return (list.length + 4) ~/ 5;
   }
 
   int getCurrentPage() {
-    if (_currentLine == 0) {
-      return 1;
-    }
-    int currentPage = 1;
-    int div = _currentLine ~/ 5;
-    int rest = _currentLine % 5;
-    currentPage = 1 + div;
-    if (rest != 0) {
-      currentPage++;
-    }
-    return currentPage;
+    return (_currentLine ~/ 5) + 1;
   }
 
   Future sendNetworkErrorReply(String text) async {
@@ -446,7 +424,7 @@ class EvenAI {
     }
 
     if (_currentLine - 5 < 0) {
-      _currentLine == 0;
+      _currentLine = 0;
     } else {
       _currentLine -= 5;
     }
@@ -519,7 +497,6 @@ class EvenAI {
     _recordingTimer = null;
     _timer?.cancel();
     _timer = null;
-    audioDataBuffer.clear();
     audioDataBuffer = [];
     audioData = null;
     list = [];

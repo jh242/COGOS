@@ -13,11 +13,9 @@ class ApiClaudeService {
   Stream<String> streamChatRequest(
       String message, ClaudeSession session) async* {
     const envKey = String.fromEnvironment('ANTHROPIC_API_KEY');
-    String apiKey = envKey;
-    if (apiKey.isEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      apiKey = prefs.getString('anthropic_api_key') ?? '';
-    }
+    final apiKey = envKey.isNotEmpty
+        ? envKey
+        : (await SharedPreferences.getInstance()).getString('anthropic_api_key') ?? '';
 
     final allMessages = [
       ...session.messages,
@@ -49,7 +47,7 @@ class ApiClaudeService {
     try {
       response = await dio.post<ResponseBody>(
         'https://api.anthropic.com/v1/messages',
-        data: jsonEncode(body),
+        data: body,
         options: Options(responseType: ResponseType.stream),
       );
     } on DioException catch (e) {

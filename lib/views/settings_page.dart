@@ -23,14 +23,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _apiKeyController.text = prefs.getString('anthropic_api_key') ?? '';
-      _relayUrlController.text =
-          prefs.getString('relay_url') ?? 'http://localhost:9090';
-      _relaySecretController.text = prefs.getString('relay_secret') ?? '';
-      _silenceThreshold =
-          (prefs.getInt('silence_threshold') ?? 2).toDouble();
-    });
+    _apiKeyController.text = prefs.getString('anthropic_api_key') ?? '';
+    _relayUrlController.text =
+        prefs.getString('relay_url') ?? 'http://localhost:9090';
+    _relaySecretController.text = prefs.getString('relay_secret') ?? '';
+    final threshold = (prefs.getInt('silence_threshold') ?? 2).toDouble();
+    if (mounted) setState(() => _silenceThreshold = threshold);
   }
 
   Future<void> _saveSettings() async {

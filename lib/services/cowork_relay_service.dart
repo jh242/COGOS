@@ -40,15 +40,13 @@ class CoworkRelayService {
     try {
       response = await dio.post<ResponseBody>(
         '$relayUrl/query',
-        data: jsonEncode(body),
+        data: body,
         options: Options(responseType: ResponseType.stream),
       );
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) throw RelayAuthException();
       throw RelayOfflineException(e.message ?? 'Network error');
     }
-
-    if (response.statusCode == 401) throw RelayAuthException();
 
     final stream = response.data!.stream;
     final buffer = StringBuffer();
@@ -74,7 +72,8 @@ class CoworkRelayService {
 
         final type = event['type'] as String?;
         if (type == 'text') {
-          yield event['text'] as String? ?? '';
+          final text = event['text'] as String? ?? '';
+          if (text.isNotEmpty) yield text;
         } else if (type == 'done') {
           final sid = event['session_id'] as String?;
           if (sid != null) session.relaySessionId = sid;
