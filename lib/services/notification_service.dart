@@ -3,40 +3,26 @@ import 'dart:convert';
 import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/models/notify_model.dart';
 import 'package:demo_ai_even/services/proto.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Manages the ANCS notification whitelist for iOS.
+///
+/// On iOS, notification forwarding to the glasses is handled automatically by
+/// the glasses firmware via the Apple Notification Center Service (ANCS) BLE
+/// profile — no Flutter-side listener is needed. This service only manages the
+/// whitelist that tells the glasses which apps to show notifications from.
 class NotificationService {
   static NotificationService? _instance;
   static NotificationService get get => _instance ??= NotificationService._();
   NotificationService._();
 
-  static const _eventChannel = EventChannel('eventNotificationReceive');
   static const _prefsKey = 'notification_whitelist';
 
   List<String> _whitelist = [];
-  int _notifyId = 0;
 
-  /// Start listening for phone notifications and forwarding them to glasses.
-  /// Call once at app startup.
-  Future<void> startListening() async {
+  /// Load persisted whitelist from prefs. Call once at app startup.
+  Future<void> init() async {
     await _loadWhitelist();
-    _eventChannel.receiveBroadcastStream().listen((event) {
-      final notify = NotifyModel.fromJson(jsonEncode(event));
-      if (notify == null) return;
-      if (_whitelist.isEmpty || _whitelist.contains(notify.appIdentifier)) {
-        _forwardToGlasses(notify);
-      }
-    }, onError: (error) {
-      print('NotificationService: EventChannel error: $error');
-    });
-  }
-
-  Future<void> _forwardToGlasses(NotifyModel notify) async {
-    if (!BleManager.get().isConnected) return;
-    final id = _notifyId & 0xFF;
-    _notifyId++;
-    await Proto.sendNotify(notify.toMap(), id);
   }
 
   /// Update the app whitelist. Empty list = allow all apps.
@@ -46,12 +32,10 @@ class NotificationService {
     await pushWhitelistToGlasses();
   }
 
-  /// Push current whitelist to glasses (call on connect and after setWhitelist).
+  /// Push current whitelist to glasses. Call on connect and after setWhitelist.
   Future<void> pushWhitelistToGlasses() async {
     if (!BleManager.get().isConnected) return;
-    final apps = _whitelist
-        .map((id) => NotifyAppModel(id, id))
-        .toList();
+    final apps = _whitelist.map((id) => NotifyAppModel(id, id)).toList();
     final model = NotifyWhitelistModel(apps);
     await Proto.sendNewAppWhiteListJson(model.toJson());
   }

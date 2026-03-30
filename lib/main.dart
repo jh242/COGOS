@@ -11,7 +11,7 @@ void main() {
   BleManager.get();
   Get.put(EvenaiModelController());
 
-  NotificationService.get.startListening();
+  NotificationService.get.init();
 
   BleManager.get().onStatusChanged = () {
     if (BleManager.get().isConnected) {
