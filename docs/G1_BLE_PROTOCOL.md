@@ -250,15 +250,21 @@ ACK sequence: `[0x04, 0xCB]` per intermediate chunk, then `[0x04, 0xC9]` final.
 JSON:
 ```json
 {
-  "msg_id": 1234567890,
-  "app_identifier": "com.example.app",
-  "title": "Title",
-  "subtitle": "Subtitle",
-  "message": "Body text",
-  "time_s": 1711234567,
-  "display_name": "App Name"
+  "type": "Add",
+  "ncs_notification": {
+    "msg_id": 1234567890,
+    "type": 1,
+    "app_identifier": "com.example.app",
+    "title": "Title",
+    "subtitle": "Subtitle",
+    "message": "Body text",
+    "time_s": 1711234567,
+    "date": "2024-01-01 12:00:00",
+    "display_name": "App Name"
+  }
 }
 ```
+> **Note:** The current `Proto.sendNotify` wraps in `{"ncs_notification": ...}` without the outer `"type": "Add"` key. MentraOS includes it. Test which the firmware requires.
 
 ---
 
@@ -347,7 +353,8 @@ Key events for this app:
 ```
 [0xF1, seq, ...200 bytes LC3 data]
 ```
-R arm only.
+R arm only. LC3 config: **16 kHz, 10 ms frame duration, 20 bytes/frame (16 kbps)**.
+`seq` = `data[1]`. LC3 payload = `data[2..201]`.
 
 ---
 
@@ -355,6 +362,9 @@ R arm only.
 ```
 [0x2C, 0x66, batteryPercent, flags, voltage_lo, voltage_hi, ...]
 ```
+- `data[2]` = battery %
+- `data[3]` = flags
+- `data[4..5]` = voltage in 0.1 mV units, little-endian: `((data[5] << 8) | data[4]) / 10` mV
 
 ---
 
@@ -389,6 +399,46 @@ Triggers full boot sequence when received from both arms.
 | `0x50` | `UNK_1` | ACKs with `0xC9`. Purpose unknown. |
 
 Worth probing: send `[0x39]` and `[0x50]` while watching display and sensors to discover function.
+Use the BLE Probe page in the app (Features → BLE Probe).
+
+---
+
+## Timing Constants
+
+| Constant | Android | iOS |
+|----------|---------|-----|
+| Heartbeat interval | 15 s | 20 s |
+| Delay between BLE chunks (general) | 5 ms | 8 ms |
+| Delay between BMP chunks | 8 ms | 8 ms |
+| Initial connection delay | 350 ms | 350 ms |
+| Reconnect base delay | 3 s | 30 s |
+| BMP end command timeout | 3 s | 1 s |
+
+## Display / Hardware Constants
+
+| Constant | Value |
+|----------|-------|
+| Display width | 488 px |
+| Font size | 21 px |
+| Lines per screen | 5 |
+| Max text chunk payload | 176 bytes |
+| BMP dimensions | 576 × 136 px |
+| BMP format | 1-bit monochrome |
+| BMP header size | 62 bytes |
+| BMP chunk size | 194 bytes |
+| LC3 sample rate | 16 kHz |
+| LC3 frame duration | 10 ms |
+| LC3 frame size | 20 bytes (16 kbps) |
+
+---
+
+## Connection Sequencing
+
+1. L arm connects first. R arm GATT connect waits until L is connected.
+   Android: R starts at t=2 s (first connect) or t=400 ms (reconnect).
+2. Notifications enabled on RX characteristic. Write CCCD descriptor `[0x01, 0x00]` after 500 ms sleep.
+3. Init sequence fires only when **both** sides have acknowledged `0x4D` with `0xC9`.
+4. Allow 350 ms after connect before sending the init sequence.
 
 ---
 
