@@ -30,6 +30,8 @@ class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate
     
     var hasStartedSpeech = false
 
+    private var pendingReconnectResult: FlutterResult?
+
     init(channel: FlutterMethodChannel) {
         UARTServiceUUID          = CBUUID(string: ServiceIdentifiers.uartServiceUUIDString)
         UARTTXCharacteristicUUID = CBUUID(string: ServiceIdentifiers.uartTXCharacteristicUUIDString)
@@ -237,10 +239,57 @@ class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate
         }
     }
 
+    func tryReconnectLastDevice(result: @escaping FlutterResult) {
+        let defaults = UserDefaults.standard
+        guard let deviceName = defaults.string(forKey: "lastDeviceName"),
+              let leftUUIDStr = defaults.string(forKey: "lastLeftUUID"),
+              let rightUUIDStr = defaults.string(forKey: "lastRightUUID"),
+              let leftUUID = UUID(uuidString: leftUUIDStr),
+              let rightUUID = UUID(uuidString: rightUUIDStr) else {
+            result(false)
+            return
+        }
+
+        if centralManager.state != .poweredOn {
+            pendingReconnectResult = result
+            return
+        }
+
+        performReconnect(deviceName: deviceName, leftUUID: leftUUID, rightUUID: rightUUID, leftUUIDStr: leftUUIDStr, rightUUIDStr: rightUUIDStr, result: result)
+    }
+
+    private func performReconnect(deviceName: String, leftUUID: UUID, rightUUID: UUID, leftUUIDStr: String, rightUUIDStr: String, result: @escaping FlutterResult) {
+        let peripherals = centralManager.retrievePeripherals(withIdentifiers: [leftUUID, rightUUID])
+
+        var foundLeft: CBPeripheral?
+        var foundRight: CBPeripheral?
+        for p in peripherals {
+            if p.identifier.uuidString == leftUUIDStr { foundLeft = p }
+            if p.identifier.uuidString == rightUUIDStr { foundRight = p }
+        }
+
+        guard let left = foundLeft, let right = foundRight else {
+            result(false)
+            return
+        }
+
+        pairedDevices[deviceName] = (left, right)
+        currentConnectingDeviceName = deviceName
+
+        centralManager.connect(left, options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true])
+        centralManager.connect(right, options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true])
+
+        result(true)
+    }
+
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
         case .poweredOn:
             print("Bluetooth is powered on.")
+            if let pendingResult = pendingReconnectResult {
+                pendingReconnectResult = nil
+                tryReconnectLastDevice(result: pendingResult)
+            }
         case .poweredOff:
             print("Bluetooth is powered off.")
         default:
