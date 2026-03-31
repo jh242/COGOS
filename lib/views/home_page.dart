@@ -26,6 +26,14 @@ class _HomePageState extends State<HomePage> {
     BleManager.get().setMethodCallHandler();
     BleManager.get().startListening();
     BleManager.get().onStatusChanged = _refreshPage;
+    _tryAutoReconnect();
+  }
+
+  Future<void> _tryAutoReconnect() async {
+    final success = await BleManager.get().tryReconnect();
+    if (!success) {
+      print('Auto-reconnect failed, manual scan available');
+    }
   }
 
   void _refreshPage() => setState(() {});

@@ -54,6 +54,8 @@ import Flutter
             case "stopEvenAI":
                 SpeechStreamRecognizer.shared.stopRecognition()
                 result(nil)
+            case "tryReconnect":
+                self.blueInstance.tryReconnectLastDevice(result: result)
             default:
                 result(FlutterMethodNotImplemented)
             }

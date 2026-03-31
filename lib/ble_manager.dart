@@ -61,6 +61,16 @@ class BleManager {
     }
   }
 
+  Future<bool> tryReconnect() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('tryReconnect');
+      return result == true;
+    } catch (e) {
+      print('tryReconnect failed: $e');
+      return false;
+    }
+  }
+
   Future<void> connectToGlasses(String deviceName) async {
     try {
       await _channel.invokeMethod('connectToGlasses', {'deviceName': deviceName});
@@ -166,7 +176,7 @@ class BleManager {
         case 0x00: // DISPLAY_READY per MentraOS; 0x00 also fires as gesture in some firmware
           if (EvenAI.get.isReceivingAudio) {
             EvenAI.get.recordOverByOS();
-          } else if (!EvenAI.get.isRunning) {
+          } else if (!EvenAI.isRunning) {
             EvenAI.get.toStartEvenAIByOS();
           } else {
             App.get.exitAll();
@@ -189,14 +199,7 @@ class BleManager {
         case 0x18: // TRIGGER_FOR_STOP_RECORDING
           EvenAI.get.recordOverByOS();
           break;
-        case 0x20: // DOUBLE_TAP per MentraOS (same gesture as 0x00 fallback)
-          if (EvenAI.get.isReceivingAudio) {
-            EvenAI.get.recordOverByOS();
-          } else if (!EvenAI.get.isRunning) {
-            EvenAI.get.toStartEvenAIByOS();
-          } else {
-            App.get.exitAll();
-          }
+        case 0x20: // DOUBLE_TAP per MentraOS — ignored on stock Even firmware
           break;
         default:
           print("Unhandled 0xF5 event: 0x${notifyIndex.toRadixString(16).padLeft(2, '0')}");
