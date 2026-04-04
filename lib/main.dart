@@ -1,6 +1,7 @@
 
 import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
+import 'package:demo_ai_even/services/glance_service.dart';
 import 'package:demo_ai_even/services/notification_service.dart';
 import 'package:demo_ai_even/services/proto.dart';
 import 'package:demo_ai_even/views/home_page.dart';
@@ -15,6 +16,7 @@ void main() async {
   Get.put(EvenaiModelController());
 
   await NotificationService.get.init();
+  GlanceService.get.init();
 
   ble.onStatusChanged = () async {
     if (ble.isConnected) {

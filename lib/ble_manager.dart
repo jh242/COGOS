@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:demo_ai_even/app.dart';
 import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/services/evenai.dart';
+import 'package:demo_ai_even/services/glance_service.dart';
 import 'package:demo_ai_even/services/proto.dart';
 import 'package:flutter/services.dart';
 
@@ -110,6 +111,7 @@ class BleManager {
 
     onStatusChanged?.call();
     startSendBeatHeart();
+    GlanceService.get.startTimer();
   }
 
   int tryTime = 0;
@@ -139,6 +141,7 @@ class BleManager {
     isConnected = false;
 
     onStatusChanged?.call();
+    GlanceService.get.stopTimer();
   }
 
   void _onPairedGlassesFound(Map<String, String> deviceInfo) {
@@ -176,15 +179,17 @@ class BleManager {
         case 0x00: // DISPLAY_READY — not a gesture on stock Even firmware
           break;
         case 0x01: // SINGLE_TAP / page change
-          if (res.lr == 'L') {
+          if (GlanceService.get.isShowing) {
+            GlanceService.get.dismiss();
+          } else if (res.lr == 'L') {
             EvenAI.get.lastPageByTouchpad();
           } else {
             EvenAI.get.nextPageByTouchpad();
           }
           break;
-        case 0x02: // HEAD_UP — start recording (R arm only)
-          if (res.lr == 'R' && !EvenAI.get.isReceivingAudio) {
-            EvenAI.get.toStartEvenAIByOS();
+        case 0x02: // HEAD_UP — show glance screen (R arm only)
+          if (res.lr == 'R' && !EvenAI.get.isReceivingAudio && !EvenAI.isRunning) {
+            GlanceService.get.showGlance();
           }
           break;
         case 0x04: // SILENCED
@@ -197,8 +202,12 @@ class BleManager {
         case 0x18: // TRIGGER_FOR_STOP_RECORDING
           EvenAI.get.recordOverByOS();
           break;
-        case 0x20: // DOUBLE_TAP — exit only
-          App.get.exitAll();
+        case 0x20: // DOUBLE_TAP — exit AI or force-refresh glance
+          if (EvenAI.isRunning) {
+            App.get.exitAll();
+          } else {
+            GlanceService.get.forceRefreshAndShow();
+          }
           break;
         default:
           print("Unhandled 0xF5 event: 0x${notifyIndex.toRadixString(16).padLeft(2, '0')}");

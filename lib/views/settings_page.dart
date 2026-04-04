@@ -14,6 +14,8 @@ class _SettingsPageState extends State<SettingsPage> {
   final _apiKeyController = TextEditingController();
   final _relayUrlController = TextEditingController();
   final _relaySecretController = TextEditingController();
+  final _weatherKeyController = TextEditingController();
+  final _newsKeyController = TextEditingController();
   double _silenceThreshold = 2.0;
   double _headUpAngle = 30.0;
 
@@ -29,6 +31,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _relayUrlController.text =
         prefs.getString('relay_url') ?? 'http://localhost:9090';
     _relaySecretController.text = prefs.getString('relay_secret') ?? '';
+    _weatherKeyController.text = prefs.getString('openweather_api_key') ?? '';
+    _newsKeyController.text = prefs.getString('news_api_key') ?? '';
     final threshold = (prefs.getInt('silence_threshold') ?? 2).toDouble();
     final angle = (prefs.getInt('head_up_angle') ?? 30).toDouble();
     if (mounted) setState(() {
@@ -42,6 +46,8 @@ class _SettingsPageState extends State<SettingsPage> {
     await prefs.setString('anthropic_api_key', _apiKeyController.text.trim());
     await prefs.setString('relay_url', _relayUrlController.text.trim());
     await prefs.setString('relay_secret', _relaySecretController.text.trim());
+    await prefs.setString('openweather_api_key', _weatherKeyController.text.trim());
+    await prefs.setString('news_api_key', _newsKeyController.text.trim());
     await prefs.setInt('silence_threshold', _silenceThreshold.round());
     await prefs.setInt('head_up_angle', _headUpAngle.round());
     EvenAI.get.silenceThresholdSecs = _silenceThreshold.round();
@@ -58,6 +64,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _apiKeyController.dispose();
     _relayUrlController.dispose();
     _relaySecretController.dispose();
+    _weatherKeyController.dispose();
+    _newsKeyController.dispose();
     super.dispose();
   }
 
@@ -90,6 +98,24 @@ class _SettingsPageState extends State<SettingsPage> {
                 obscureText: true,
                 decoration: const InputDecoration(
                   labelText: 'Relay Secret',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _weatherKeyController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'OpenWeatherMap API Key',
+                  hintText: 'For glance weather data',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _newsKeyController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'NewsAPI Key',
+                  hintText: 'For glance news headlines',
                 ),
               ),
               const SizedBox(height: 24),

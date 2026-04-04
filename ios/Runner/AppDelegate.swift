@@ -61,6 +61,10 @@ import Flutter
             }
         }
      
+        // Register glance screen channels
+        TransitChannel.shared.register(with: messenger)
+        NotificationChannel.shared.register(with: messenger)
+
         let scheduleEvent = FlutterEventChannel(name: "eventBleReceive", binaryMessenger: messenger)
         scheduleEvent.setStreamHandler(self)
         

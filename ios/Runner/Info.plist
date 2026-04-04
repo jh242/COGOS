@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app uses your location to show nearby contextual info on your glasses.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app reads your calendar to show upcoming events on your glasses.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>This app needs Bluetooth access to connect to your smart glasses.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

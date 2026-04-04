@@ -45,6 +45,9 @@ dependencies:
   # Toast - https://pub.dev/packages/fluttertoast
   fluttertoast: ^8.2.8
   shared_preferences: ^2.3.0
+  geolocator: ^12.0.0
+  geocoding: ^3.0.0
+  device_calendar: ^4.3.0
 
 
 dev_dependencies:
