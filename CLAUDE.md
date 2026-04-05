@@ -6,15 +6,14 @@ This file gives Claude Code the context it needs to work effectively in this rep
 
 ## What this project is
 
-An **iOS-only** Flutter (Dart) mobile app that turns **Even Realities G1 smart
-glasses** into a wearable Claude terminal.  The phone connects to the glasses
+An **iOS-only** Swift / SwiftUI app that turns **Even Realities G1 smart
+glasses** into a wearable Claude terminal. The phone connects to the glasses
 over dual BLE (one connection per arm), streams LC3 audio from the glasses
-microphone, converts speech to text via the native platform layer, calls the
+microphone, transcribes speech via the native iOS Speech framework, calls the
 Claude API, and renders the reply on the glasses waveguide display.
 
-> **Note:** Although built with Flutter, this app targets iOS exclusively.
-> Android support is not a goal.  Prefer native iOS APIs (CoreLocation, MapKit,
-> EventKit, etc.) over cross-platform pub.dev packages when possible.
+Pure Swift / SwiftUI. iOS 14+. Bundle ID: `com.jackhu.cogos`.
+stdlib + Apple frameworks only (no SPM, no CocoaPods).
 
 ---
 
@@ -22,55 +21,37 @@ Claude API, and renders the reply on the glasses waveguide display.
 
 | Layer | Technology |
 |-------|-----------|
-| App framework | Flutter / Dart (iOS only) |
-| State management | GetX (`get` package) |
-| HTTP client | Dio |
-| BLE ↔ Flutter bridge | `MethodChannel('method.bluetooth')` + `EventChannel` |
-| Speech-to-text | Native iOS (Speech framework), exposed via `EventChannel(eventSpeechRecognize)` |
-| Audio format | LC3 (Low Complexity Communication Codec) from glasses mic |
+| App framework | Swift / SwiftUI (iOS 14+) |
+| State management | `@MainActor` ObservableObject + `@Published` + `@EnvironmentObject` |
+| Concurrency | Swift actors, async/await, AsyncStream, CheckedContinuation |
+| Event bus | Combine `PassthroughSubject` |
+| BLE | CoreBluetooth (dual CBPeripheral, one per arm) |
+| Speech-to-text | Apple Speech framework (`SFSpeechRecognizer`, on-device) |
+| Audio format | LC3 codec (C sources under `COGOS/Session/lc3/`) |
+| HTTP client | `URLSession` |
 | AI backend | Anthropic Claude API (`api.anthropic.com/v1/messages`) |
-| Local AI sessions | Claude Code CLI (`claude --print`) via relay server |
+| Local AI sessions | Claude Code CLI (`claude --print`) via Node.js relay server |
 
 ---
 
 ## Repository layout
 
 ```
-lib/
-  ble_manager.dart           # BLE send/receive, TouchBar event dispatch
-  app.dart                   # App-level exit / global state
-  main.dart                  # Entry point
-  controllers/
-    evenai_model_controller.dart  # GetX controller for history list
-    bmp_update_manager.dart       # BMP image transfer state
-  models/
-    evenai_model.dart             # Q&A history item model
-    claude_session.dart           # (NEW) Claude session + conversation history
-  services/
-    ble.dart                      # BleReceive data model
-    proto.dart                    # Low-level BLE packet builders
-    evenai.dart                   # EvenAI session lifecycle (main orchestrator)
-    evenai_proto.dart             # EvenAI-specific packet helpers
-    text_service.dart             # Text → BLE packet conversion
-    features_services.dart        # BMP / notification helpers
-    api_services.dart             # Qwen/Aliyun API (legacy, keep for reference)
-    api_services_deepseek.dart    # DeepSeek API (legacy, being replaced)
-    api_claude_service.dart       # (NEW) Anthropic Claude API client
-    cowork_relay_service.dart     # (NEW) Claude Code relay client
-  views/
-    home_page.dart
-    even_list_page.dart
-    features_page.dart
-    features/
-      bmp_page.dart
-      text_page.dart
-      notification/
-  utils/
-    string_extension.dart
-    utils.dart
-tools/
-  relay/
-    server.js        # (NEW) local Claude Code relay server (Node.js)
+COGOS/
+  App/               SwiftUI @main, AppState, ContentView
+  BLE/               BluetoothManager, BleRequestQueue, GestureRouter, UUIDs
+  Protocol/          Proto, EvenAIProto, BmpTransfer, CRC32XZ
+  Session/           EvenAISession, SpeechStreamRecognizer, TextPaginator,
+                     PcmConverter, LC3 codec (C)
+  API/               AnthropicClient, HaikuClient, CoworkRelayClient, SSEParser
+  Glance/            GlanceService + Sources/ (location, calendar, weather,
+                     news, transit, notifications)
+  Platform/          NativeLocation, Settings, NotificationWhitelist
+  Models/            EvenaiModel, HistoryStore
+  Views/             HomeView, HistoryView, SettingsView, BleProbeView, …
+  Supporting/        Info.plist, COGOS-Bridging-Header.h
+tools/relay/         Node.js Claude Code relay server
+docs/                Design docs
 ```
 
 ---
@@ -80,7 +61,7 @@ tools/
 ### Dual-BLE architecture
 The G1 has **two independent BLE connections** (left arm = `L`, right arm = `R`).
 Send to L first; only send to R after L acknowledges with `0xC9`.
-`BleManager.sendBoth()` handles this sequencing.
+`BleRequestQueue.sendBoth(_:)` and `.requestList(_:)` handle this sequencing.
 
 ### Key commands
 
@@ -89,19 +70,26 @@ Send to L first; only send to R after L acknowledges with `0xC9`.
 | App → Glasses | `0x0E 0x01` | Enable right mic |
 | App → Glasses | `0x0E 0x00` | Disable mic |
 | App → Glasses | `0x4E ...` | Send AI result / text page |
+| App → Glasses | `0x25 ...` | Heartbeat (every 8s) |
+| App → Glasses | `0x15/0x20/0x16` | BMP upload / finish / CRC |
+| App → Glasses | `0x04 ...` | Notification whitelist JSON |
+| App → Glasses | `0x4B ...` | Notify push |
+| App → Glasses | `0x18` | Exit to dashboard |
+| App → Glasses | `0x0B angle 0x01` | Head-up angle threshold |
 | Glasses → App | `0xF1 seq data` | LC3 audio chunk |
 | Glasses → App | `0xF5 0x17` | Long-press: start Even AI |
 | Glasses → App | `0xF5 0x18` | Stop recording |
 | Glasses → App | `0xF5 0x01` | Single tap (page turn) |
-| Glasses → App | `0xF5 0x00` | Double tap (exit) |
+| Glasses → App | `0xF5 0x02` | Head-up |
 | Glasses → App | `0xF5 0x04/05` | Triple tap (mode cycle) |
+| Glasses → App | `0xF5 0x20` | Double-tap exit |
 
 ### Display constraints
 - Max width: **488 px**
-- Font size: **21 px** (configurable)
+- Font size: **21 px**
 - Lines per screen: **5**
-- Text is split via `EvenAIDataMethod.measureStringList()` using Flutter's
-  `TextPainter` — do not replace this with a naive character count.
+- Text is paginated by `TextPaginator` using
+  `NSAttributedString.size(withAttributes:)` — not a naive character count.
 
 ### 0x4E packet `newscreen` byte
 
@@ -119,57 +107,40 @@ lower 4 bits — action:
 
 ---
 
-## Even AI session lifecycle
+## Even AI session lifecycle (EvenAISession.swift)
 
 ```
-[Long-press L]
-  → 0xF5 0x17 received
-  → EvenAI.toStartEvenAIByOS()
-     → startListening()       ← begins partial STT transcript
-     → openEvenAIMic()        ← sends 0x0E 0x01 to R arm
-[Release]
-  → 0xF5 0x18 received
-  → EvenAI.recordOverByOS()
-     → stopEvenAI native
-     → check wake word in combinedText
-     → call Claude API
-     → startSendReply(answer)  ← paginates & sends via 0x4E
-[Double-tap]
-  → 0xF5 0x00 → App.exitAll() + EvenAI.clear()
+[Long-press L]  → 0xF5 0x17
+  → toStartEvenAIByOS()
+     → proto.micOn()                 ← sends 0x0E 0x01 to R
+     → speech.startRecognition()     ← AsyncStream<String>
+     → silence timer + 30s timeout
+[Release]       → 0xF5 0x18
+  → recordOverByOS()
+     → proto.micOff()
+     → strip wake word from transcript
+     → try CoworkRelayClient (if cowork mode + relay configured)
+     → fall back to AnthropicClient on RelayError.offline
+     → TextPaginator → startSendReply() via 0x4E pages
+[Double-tap]    → 0xF5 0x20 → appState.exitAll() + session.clear()
 ```
 
 ---
 
-## Adding the Claude API
+## Anthropic API (AnthropicClient.swift)
 
-### Endpoint
 `POST https://api.anthropic.com/v1/messages`
 
-### Required headers
+Headers:
 ```
 x-api-key: <ANTHROPIC_API_KEY>
 anthropic-version: 2023-06-01
 content-type: application/json
 ```
 
-### Minimal request body
-```json
-{
-  "model": "claude-sonnet-4-6",
-  "max_tokens": 1024,
-  "system": "...",
-  "messages": [{"role":"user","content":"..."}]
-}
-```
-
-### API key injection
-```
-flutter run --dart-define=ANTHROPIC_API_KEY=sk-ant-...
-```
-Access in Dart:
-```dart
-const String.fromEnvironment('ANTHROPIC_API_KEY', defaultValue: '')
-```
+Models: `claude-sonnet-4-6` (main), `claude-haiku-4-5-20251001` (glance ranking).
+Uses `URLSession.bytes(for:)` on iOS 15+, falls back to `data(for:)` on iOS 14.
+SSE parsed by `SSEParser.swift`.
 
 ---
 
@@ -181,63 +152,54 @@ const String.fromEnvironment('ANTHROPIC_API_KEY', defaultValue: '')
 | `code` | triple-tap L | Expert programmer, plain text code | Per-session |
 | `cowork` | triple-tap R | Pair-programming, persistent context | Persisted |
 
-Mode is shown in every page header sent to glasses: `[CHAT]`, `[CODE]`, `[WORK]`.
+Mode is shown in every page header: `[CHAT]`, `[CODE]`, `[WORK]`.
 
 ---
 
 ## Wake word
 
 - Phrases detected client-side in the partial STT transcript.
-- Default list: `['hey claude', 'ok claude', 'claude']`
-- Strip the wake phrase from the query before sending to the API.
-- If no wake phrase found and `requireWakeWord == true`, prompt the user on
-  glasses: `Say "Hey Claude" to start`.
+- Default list: `["hey claude", "ok claude", "claude"]`
+- Wake phrase is stripped from the query before sending to the API.
 
 ---
 
 ## Cowork relay (Claude Code integration)
 
-For `cowork` mode the app optionally delegates to a local relay server instead
-of calling the API directly.  The relay spawns `claude --print` CLI processes
-and returns the output.
+For `cowork` mode the app optionally delegates to a local relay that spawns
+`claude --print` CLI processes.
 
 ```
-Flutter app  ──POST /query──►  relay (localhost:9090)
-                               └─ claude --print "<msg>"
-                               ◄── streamed response
+iOS app  ──POST /query──►  relay (localhost:9090)
+                            └─ claude --print "<msg>"
+                            ◄── streamed SSE response
 ```
 
-The relay is a small Node.js script in `tools/relay/server.js`.
-If the relay is unreachable, `cowork` mode falls back to direct API.
+Relay lives in `tools/relay/server.js`. If unreachable, falls through to the
+direct Anthropic API.
 
 ---
 
 ## Conventions and gotchas
 
-- Always send L before R.  `BleManager.sendBoth()` is the safe wrapper.
-- `Proto.sendEvenAIData()` assembles the 0x4E packet — don't build it manually.
-- `EvenAIDataMethod.measureStringList()` must run on the **Flutter UI thread**
-  because it uses `TextPainter`.  Do not call from an isolate.
-- `isRunning` is both a bool and an `RxBool` — set it via the setter
-  `EvenAI.isRunning = ...` to update both.
-- `clear()` in `EvenAI` resets all state — always call it on exit paths.
-- The existing `retryCount` / `maxRetry` retry loop in `sendEvenAIReply` is
-  intentional; don't remove it.
-- API keys must never be committed; use `--dart-define` or a `.env` approach.
+- Always send L before R. Use `BleRequestQueue.sendBoth(_:)`.
+- `Proto.sendEvenAIData(...)` assembles 0x4E packets — don't hand-roll.
+- `TextPaginator` runs on `@MainActor` because it touches UIKit text metrics.
+- Actor isolation: `Proto` and `BleRequestQueue` are actors; call with `await`.
+- `EvenAISession.clear()` resets all state — call on every exit path.
+- Retry loops in `sendEvenAIReply` are intentional; don't remove them.
+- API keys live in `UserDefaults` via `Settings.swift` or Xcode scheme env;
+  never commit them.
 
 ---
 
 ## Running the app
 
-```bash
-# iOS
-flutter run --dart-define=ANTHROPIC_API_KEY=sk-ant-... -d <ios-device>
-
-# Android
-flutter run --dart-define=ANTHROPIC_API_KEY=sk-ant-... -d <android-device>
-```
-
-Bluetooth requires a physical device — the simulator cannot test BLE.
+No `.xcodeproj` is committed. See [`COGOS/README.md`](COGOS/README.md) to
+create one in Xcode, drag in `COGOS/`, set the bridging header
+(`COGOS/Supporting/COGOS-Bridging-Header.h`), use
+`COGOS/Supporting/Info.plist`, and enable Background Modes → Uses Bluetooth
+LE accessories. Requires a physical iOS device (BLE cannot be simulated).
 
 ## Running the cowork relay
 
@@ -251,7 +213,9 @@ ANTHROPIC_API_KEY=sk-ant-... node server.js
 
 ## Key files to read before making changes
 
-1. `lib/services/evenai.dart` — session orchestrator, touch this carefully
-2. `lib/ble_manager.dart` — BLE send/receive and TouchBar routing
-3. `lib/services/proto.dart` — packet builders, understand before adding cmds
-4. `lib/services/evenai_proto.dart` — EvenAI-specific packet detail
+1. `COGOS/Session/EvenAISession.swift` — session orchestrator
+2. `COGOS/BLE/BluetoothManager.swift` — dual-BLE transport + packet bus
+3. `COGOS/BLE/BleRequestQueue.swift` — request/response + sendBoth sequencing
+4. `COGOS/Protocol/Proto.swift` — command helpers, packet assemblers
+5. `COGOS/Protocol/EvenAIProto.swift` — 0x4E multi-packet format
+6. `COGOS/App/AppState.swift` — top-level wiring
