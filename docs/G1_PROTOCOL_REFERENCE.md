@@ -19,10 +19,18 @@ Realities EvenDemoApp.
 | BLE service (Nordic UART) | `6e400001-b5a3-f393-e0a9-e50e24dcca9e` |
 | TX characteristic (write) | `6e400002-b5a3-f393-e0a9-e50e24dcca9e` |
 | RX characteristic (notify) | `6e400003-b5a3-f393-e0a9-e50e24dcca9e` |
+| ATT write handle — left arm  | `0x0403` |
+| ATT write handle — right arm | `0x0405` |
 | MTU | 251 |
 | Max payload size | 180 bytes (observed firmware limit) |
 | Heartbeat interval | 8 s (glasses disconnect at ~32 s idle) |
 | Device name format | `G1_XX_[L\|R]_YYYYY` |
+
+**Wireshark filter for G1 downlink (phone → glasses) only:**
+```
+btatt.handle == 0x0403 || btatt.handle == 0x0405
+```
+Add `&& btatt.opcode == 0x52` to narrow to Write Commands only.
 
 ---
 
