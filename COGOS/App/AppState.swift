@@ -31,7 +31,7 @@ final class AppState: ObservableObject {
         let requestQueue = BleRequestQueue(bluetooth: bluetooth)
         let proto = Proto(queue: requestQueue)
         let session = EvenAISession(proto: proto, speech: speech, settings: settings)
-        let glance = GlanceService(proto: proto, settings: settings, location: location, session: session)
+        let glance = GlanceService(proto: proto, location: location, session: session)
         let gestureRouter = GestureRouter(session: session, glance: glance)
 
         self.settings = settings

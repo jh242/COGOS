@@ -4,31 +4,30 @@ struct WeatherSource: GlanceSource {
     let name = "weather"
     var enabled = true
     var cacheDuration: TimeInterval = 900
+    var tier: GlanceTier = .fixed
 
-    let settings: Settings
     let location: NativeLocation
 
     func fetch() async -> String? {
-        let apiKey = await MainActor.run { settings.resolvedOpenweatherKey }
-        guard !apiKey.isEmpty else { return nil }
-
         var loc = location.lastKnownLocation()
         if loc == nil { loc = await location.requestLocation() }
         guard let loc = loc else { return nil }
 
         let lat = loc.coordinate.latitude
         let lon = loc.coordinate.longitude
-        guard let url = URL(string: "https://api.openweathermap.org/data/2.5/weather?lat=\(lat)&lon=\(lon)&appid=\(apiKey)&units=imperial") else { return nil }
+        // wttr.in keyless weather: %t = temperature, %C = condition.
+        // Default units are metric (Celsius); append &m to be explicit.
+        guard let url = URL(string: "https://wttr.in/\(lat),\(lon)?format=%t+%C&m") else { return nil }
 
         var req = URLRequest(url: url)
         req.timeoutInterval = 5
-        guard let (data, _) = try? await URLSession.shared.data(for: req),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-
-        let temp = ((obj["main"] as? [String: Any])?["temp"] as? NSNumber)?.intValue
-        let weather = (obj["weather"] as? [[String: Any]])?.first
-        let condition = (weather?["main"] as? String) ?? ""
-        let tempStr = temp.map(String.init) ?? "?"
-        return "Weather: \(tempStr)F \(condition)"
+        // wttr.in serves ASCII-art HTML to browser UAs; a curl-like UA gets the short text form.
+        req.setValue("curl/cogos", forHTTPHeaderField: "User-Agent")
+        guard let (data, response) = try? await URLSession.shared.data(for: req) else { return nil }
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
+        guard let body = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              !body.isEmpty else { return nil }
+        return "Weather: \(body)"
     }
 }

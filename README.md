@@ -19,7 +19,8 @@ the `COGOS/` folder into the project).
 Set in the in-app Settings screen (persisted to `UserDefaults`) or export
 `ANTHROPIC_API_KEY` in the Xcode scheme's environment variables.
 
-Optional: `OPENWEATHER_API_KEY`, `NEWS_API_KEY` for glance sources.
+Weather and news glance sources are keyless: weather via
+[wttr.in](https://wttr.in), news via Google News RSS.
 
 ## Cowork relay (optional)
 

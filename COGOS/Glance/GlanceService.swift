@@ -1,10 +1,15 @@
 import Foundation
 
-/// Context-aware glance HUD. Ports `lib/services/glance_service.dart`.
+/// Context-aware glance HUD.
+///
+/// Rendering policy:
+///   line 1-2  → fixed sources (time, weather) always shown
+///   line 3-5  → one contextual source chosen by relevance/priority
+///               (calendar → transit → notifications), falling back to news
+///               if nothing contextual is relevant right now.
 @MainActor
 final class GlanceService: ObservableObject {
     private let proto: Proto
-    private let settings: Settings
     private let location: NativeLocation
     private weak var session: EvenAISession?
 
@@ -16,9 +21,8 @@ final class GlanceService: ObservableObject {
 
     @Published var isShowing = false
 
-    init(proto: Proto, settings: Settings, location: NativeLocation, session: EvenAISession) {
+    init(proto: Proto, location: NativeLocation, session: EvenAISession) {
         self.proto = proto
-        self.settings = settings
         self.location = location
         self.session = session
         buildSources()
@@ -26,12 +30,12 @@ final class GlanceService: ObservableObject {
 
     private func buildSources() {
         sources = [
-            LocationSource(location: location),
+            TimeSource(),
+            WeatherSource(location: location),
             CalendarSource(),
-            WeatherSource(settings: settings, location: location),
             TransitSource(location: location),
             NotificationSource(),
-            NewsSource(settings: settings)
+            NewsSource()
         ]
     }
 
@@ -61,52 +65,51 @@ final class GlanceService: ObservableObject {
         defer { isRefreshing = false }
 
         let now = Date()
-        var cachedSnippets: [String] = []
-        var staleSources: [GlanceSource] = []
-        for s in sources {
-            if !s.enabled { continue }
-            if let (data, at) = sourceCache[s.name],
-               s.cacheDuration > 0, now.timeIntervalSince(at) < s.cacheDuration {
-                cachedSnippets.append(data)
-            } else {
-                staleSources.append(s)
-            }
+        var userLoc = location.lastKnownLocation()
+        if userLoc == nil { userLoc = await location.requestLocation() }
+        let ctx = GlanceContext(now: now, userLocation: userLoc)
+
+        var snippets: [String] = []
+
+        // 1. Fixed tier — always included.
+        for s in sources where s.enabled && s.tier == .fixed {
+            if let line = await fetchCached(s, now: now) { snippets.append(line) }
         }
 
-        var freshSnippets: [String] = []
-        await withTaskGroup(of: (String, String?).self) { group in
-            for src in staleSources {
-                group.addTask { (src.name, await src.fetch()) }
-            }
-            for await (name, data) in group {
-                if let d = data, !d.isEmpty {
-                    sourceCache[name] = (d, now)
-                    freshSnippets.append(d)
+        // 2. Contextual tier — pick the single best relevant source.
+        var scored: [(Int, GlanceSource)] = []
+        for s in sources where s.enabled && s.tier == .contextual {
+            if let p = await s.relevance(ctx) { scored.append((p, s)) }
+        }
+        scored.sort { $0.0 < $1.0 }
+        var pickedContextual = false
+        if let winner = scored.first?.1,
+           let line = await fetchCached(winner, now: now) {
+            snippets.append(line)
+            pickedContextual = true
+        }
+
+        // 3. Fallback tier — only if no contextual source fired.
+        if !pickedContextual {
+            for s in sources where s.enabled && s.tier == .fallback {
+                if let line = await fetchCached(s, now: now) {
+                    snippets.append(line); break
                 }
             }
         }
 
-        if freshSnippets.isEmpty && !cachedLines.isEmpty { return }
+        cachedLines = snippets.isEmpty ? ["No data available"] : snippets
+    }
 
-        let snippets = cachedSnippets + freshSnippets
-        if snippets.isEmpty { cachedLines = ["No data available"]; return }
-
-        if let client = settings.makeHaikuClient() {
-            do {
-                let lines = try await client.summarize(
-                    context: snippets.joined(separator: "\n"),
-                    systemPrompt: "You are a smart glasses HUD. Output exactly 5 lines, max 23 chars each. " +
-                                  "Show the most relevant info right now. Prioritize urgent/time-sensitive " +
-                                  "items, then contextual info, then notifications. Be terse. No markdown.",
-                    maxTokens: 100
-                )
-                cachedLines = lines.isEmpty ? ["No response"] : lines
-            } catch {
-                cachedLines = ["Glance unavailable"]
-            }
-        } else {
-            cachedLines = ["No API key set", "Add key in Settings"]
+    /// Fetch a source, honoring its cacheDuration.
+    private func fetchCached(_ s: GlanceSource, now: Date) async -> String? {
+        if let (data, at) = sourceCache[s.name],
+           s.cacheDuration > 0, now.timeIntervalSince(at) < s.cacheDuration {
+            return data
         }
+        guard let data = await s.fetch(), !data.isEmpty else { return nil }
+        sourceCache[s.name] = (data, now)
+        return data
     }
 
     // MARK: - Show / dismiss

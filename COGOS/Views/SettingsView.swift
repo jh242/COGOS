@@ -8,8 +8,6 @@ struct SettingsView: View {
         Form {
             Section(header: Text("API Keys")) {
                 SecureField("Anthropic API Key (sk-ant-...)", text: $settings.anthropicAPIKey)
-                SecureField("OpenWeatherMap API Key", text: $settings.openweatherAPIKey)
-                SecureField("NewsAPI Key", text: $settings.newsAPIKey)
             }
             Section(header: Text("Voice")) {
                 Stepper("Silence threshold: \(settings.silenceThreshold)s",

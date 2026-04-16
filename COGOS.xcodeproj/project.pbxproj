@@ -20,6 +20,8 @@
 		2DEFB2786588E3A7CFE3F862 /* NativeLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F4E52F97091402FF3A89933 /* NativeLocation.swift */; };
 		2F6807F6F51D137B182660D4 /* sns.c in Sources */ = {isa = PBXBuildFile; fileRef = B1CA71FD235577C83E7092A7 /* sns.c */; };
 		307F1F534B3B779A5D4684FA /* GlanceSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16E32B6DCAA910EB6074B7CC /* GlanceSource.swift */; };
+		FFCC000000000000000C0002 /* GlanceContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCC000000000000000C0001 /* GlanceContext.swift */; };
+		FFCC000000000000000C0004 /* TimeSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCC000000000000000C0003 /* TimeSource.swift */; };
 		318832D4EAE82CC7E245B013 /* attdet.c in Sources */ = {isa = PBXBuildFile; fileRef = 89C377C5FCF430D2BC8BF405 /* attdet.c */; };
 		32DC210B63697F3540C81EFC /* mdct.c in Sources */ = {isa = PBXBuildFile; fileRef = 1B90051AC682A84EA35E73FE /* mdct.c */; };
 		38BB35AA5F4EC845570652F3 /* GattProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242725BDCAC3BB8542773B93 /* GattProtocol.swift */; };
@@ -34,6 +36,7 @@
 		6B0EB757F3078D1B6D04BD80 /* ltpf.c in Sources */ = {isa = PBXBuildFile; fileRef = C61D7BA975878446A88FAFE2 /* ltpf.c */; };
 		6E37732F68B3B8FD249CE6B8 /* spec.c in Sources */ = {isa = PBXBuildFile; fileRef = 521CC9293648CBB8BF35A1F9 /* spec.c */; };
 		77894810393434DC1330619D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CADF95E8AEEC032E84E3C6 /* SettingsView.swift */; };
+		7F25D470BC1D6DA2A5D5A6C2 /* WTFTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E02B6A57AE767C8ECC45B65 /* WTFTClient.swift */; };
 		85EB99995323989CABAC1B37 /* energy.c in Sources */ = {isa = PBXBuildFile; fileRef = A75CFBAE5EC7231466924D34 /* energy.c */; };
 		86C0FCC167E172A3B7BAE7B8 /* TransitSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C288D5B1E74BDDEB923DE0 /* TransitSource.swift */; };
 		8C5780789BC25B55F7008DD1 /* bwdet.c in Sources */ = {isa = PBXBuildFile; fileRef = 334CD6E5DEC843341A0EC055 /* bwdet.c */; };
@@ -70,6 +73,8 @@
 		0EE01BB747026B40560B8E29 /* bits.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bits.h; sourceTree = "<group>"; };
 		102321C2B19D72ED907A02DC /* lc3_cpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lc3_cpp.h; sourceTree = "<group>"; };
 		16E32B6DCAA910EB6074B7CC /* GlanceSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceSource.swift; sourceTree = "<group>"; };
+		FFCC000000000000000C0001 /* GlanceContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceContext.swift; sourceTree = "<group>"; };
+		FFCC000000000000000C0003 /* TimeSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeSource.swift; sourceTree = "<group>"; };
 		1B90051AC682A84EA35E73FE /* mdct.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mdct.c; sourceTree = "<group>"; };
 		1F2FA8FC456628ED332176E5 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		2050FB1FD7A27BF2158CE35D /* NotificationSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSource.swift; sourceTree = "<group>"; };
@@ -81,6 +86,7 @@
 		2970D28CAD7C72404A1C3BB5 /* EvenAISession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvenAISession.swift; sourceTree = "<group>"; };
 		29DB840C9E65CE8B6C30956B /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		2B1F9D2472C420E1CB64CB89 /* tns.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tns.c; sourceTree = "<group>"; };
+		2E02B6A57AE767C8ECC45B65 /* WTFTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WTFTClient.swift; sourceTree = "<group>"; };
 		31FC4DB318EF1384F29A6733 /* ltpf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ltpf.h; sourceTree = "<group>"; };
 		334CD6E5DEC843341A0EC055 /* bwdet.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bwdet.c; sourceTree = "<group>"; };
 		33FE4A560EBA557285057C21 /* NewsSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsSource.swift; sourceTree = "<group>"; };
@@ -241,8 +247,10 @@
 				A040A315724B2A6145E81DE3 /* LocationSource.swift */,
 				33FE4A560EBA557285057C21 /* NewsSource.swift */,
 				2050FB1FD7A27BF2158CE35D /* NotificationSource.swift */,
+				FFCC000000000000000C0003 /* TimeSource.swift */,
 				D2C288D5B1E74BDDEB923DE0 /* TransitSource.swift */,
 				083F9CAC3CE27674F2A039ED /* WeatherSource.swift */,
+				2E02B6A57AE767C8ECC45B65 /* WTFTClient.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -302,6 +310,7 @@
 		D2B9DCEEB5BA9A975B401F61 /* Glance */ = {
 			isa = PBXGroup;
 			children = (
+				FFCC000000000000000C0001 /* GlanceContext.swift */,
 				65F51625479732C33F2AA6EC /* GlanceService.swift */,
 				16E32B6DCAA910EB6074B7CC /* GlanceSource.swift */,
 				68E1AEBF7ABD7F92B9C59F99 /* Sources */,
@@ -415,7 +424,9 @@
 				38BB35AA5F4EC845570652F3 /* GattProtocol.swift in Sources */,
 				3DDB4B213A0A9CC39E2A4D52 /* GestureRouter.swift in Sources */,
 				5F232324D9C9D622CB0E3C4A /* GlanceService.swift in Sources */,
+				FFCC000000000000000C0002 /* GlanceContext.swift in Sources */,
 				307F1F534B3B779A5D4684FA /* GlanceSource.swift in Sources */,
+				FFCC000000000000000C0004 /* TimeSource.swift in Sources */,
 				DF2A779A30C3AD31A06C537E /* HistoryListView.swift in Sources */,
 				C1C219EBEDA84436563C6594 /* HistoryStore.swift in Sources */,
 				F4288EFCCCDA2672BE07E4B2 /* HomeView.swift in Sources */,
@@ -437,6 +448,7 @@
 				8C70826DC65118021C1F4465 /* TextEntryView.swift in Sources */,
 				8F8BD9D0A2B6E353AE6F7AA3 /* TextPaginator.swift in Sources */,
 				86C0FCC167E172A3B7BAE7B8 /* TransitSource.swift in Sources */,
+				7F25D470BC1D6DA2A5D5A6C2 /* WTFTClient.swift in Sources */,
 				40D39E69967C289BA9BF32EC /* WeatherSource.swift in Sources */,
 				318832D4EAE82CC7E245B013 /* attdet.c in Sources */,
 				966128DC4254474D124AC4D6 /* bits.c in Sources */,
