@@ -52,29 +52,77 @@ COGOS's value-add is Claude + our own data sources, not a re-skinned UX.
 
 ## Open research before coding
 
-The protocol reference doc names these commands but doesn't pin down exact
-byte layouts. Before writing `Proto` helpers, I need to read the Gadgetbridge
-driver source for each:
+**Status update (2026-04-16):** Gadgetbridge PR #4553 source was inspected
+end-to-end. Results:
 
-1. **`0x06 0x01 TIME_AND_WEATHER`** — payload format: unix ts width (32/64),
-   timezone encoding, weather id byte, temperature encoding (°C signed byte?
-   2-byte int?), format vs display units.
-2. **`0x06 0x03 CALENDAR`** — per-event encoding: start ts, end ts, title as
-   UTF-8 with length prefix? Chunking scheme (same as `getPackList` or a
-   different one)? Documented cap is 4 pages × 2 events = 8 events.
-3. **`0x06 0x06 MODE`** — `DashboardMode` (FULL/DUAL/MINIMAL) + which
-   `DashboardPaneMode` slot we configure. Probably need to set this once on
-   connect so Quick Notes is the active pane for contextual output.
-4. **`0x1E 0x03 NOTE_TEXT_EDIT`** — has "sub-sub-commands" for add / update /
-   delete per the firmware-features doc. Need exact byte values, note-id
-   width, text encoding, max length per note.
-5. **`0x1E 0x08 NOTE_ADD`** — may or may not be separate from `0x03`'s
-   add sub-sub-command. Clarify overlap.
-6. **Empirical probing via `BleProbeView`**: push a dummy quick note, confirm
-   it shows up in the Quick Notes dashboard pane when user double-taps.
+### Pinned (done)
 
-All of the above should be appended to `docs/G1_PROTOCOL_REFERENCE.md` as we
-pin them down, so future work doesn't re-derive.
+1. **`0x06 0x01 TIME_AND_WEATHER`** — fixed 21-byte packet. Layout in
+   `docs/G1_PROTOCOL_REFERENCE.md`. u32 LE unix_seconds + u64 LE unix_millis
+   + weather byte + temp (i8 Celsius) + unit + 12/24h flag.
+2. **`0x06 0x03 CALENDAR`** — chunked TLV. 9-byte per-chunk header,
+   `0x01/0x02/0x03` TLV per event (title/time_str/location). Time is
+   **pre-formatted string**, not a timestamp. Max 171 body bytes per
+   chunk. Layout in `docs/G1_PROTOCOL_REFERENCE.md`.
+3. **`0x06 0x06 MODE`** — fixed 7-byte packet. Mode byte + secondary pane
+   byte. Layout in `docs/G1_PROTOCOL_REFERENCE.md`.
+
+### Blocked on live-traffic sniff
+
+4. **`0x1E 0x03 NOTE_TEXT_EDIT`** — *no public source implements this*.
+   Gadgetbridge, MentraOS, and the official `EvenDemoApp` all declare the
+   sub-command constants but none serialize a payload. Gadgetbridge's own
+   comments are speculative. Pin-down requires running the official Even
+   Realities app against a BLE sniffer while it adds/edits/deletes a
+   quick note.
+5. **`0x1E 0x08 NOTE_ADD`** — same gap as (4).
+6. **`0x06 0x04 STOCKS` and `0x06 0x05 NEWS`** — same gap. The news and
+   stocks panes exist in firmware (addressable via `DashboardPaneMode`)
+   but the payload format is undocumented. News was considered as a
+   contextual-text alternative to Quick Notes; it's blocked on the same
+   sniff. Good news: one capture session covers both `0x1E` and
+   `0x06 0x04/0x05`.
+7. **`0x58 DASHBOARD_CALENDAR_NEXT_UP_SET`** — declared in
+   `G1Constants.java:140`, never used anywhere. Same live-sniff story.
+
+### Material consequence
+
+Quick Notes is the migration plan's chosen home for contextual sources
+(transit, notifications). Without the `0x1E` payload layout, we cannot
+ship Q3 ("slot 0 only, overwrite"). Options:
+
+- **A. Sniff-first.** Set up a macOS `PacketLogger` or Android HCI snoop
+  capture against the official Even app. Pin down the `0x1E` byte layout,
+  update the reference doc, then proceed with the original plan.
+- **B. Temporary hybrid.** Push firmware dashboard for time/weather/
+  calendar (the three pinned commands) but keep the current bitmap
+  glance for contextual sources until Quick Notes is decoded. Phase 3
+  would drop the bitmap *only* for the calendar/weather/time path.
+- **C. Drop contextual-on-glass entirely.** Transit/notifications become
+  AI-triggered ("Hey Claude, what's my next bus?") rather than
+  passive glance data. Retires the bitmap pipeline entirely with no
+  Quick Notes dependency.
+
+**Recommendation:** start with A (sniff) — a single 30-minute capture
+session covers Quick Notes, News, Stocks, **and** `0x58` next-up. One
+sniff unblocks four commands, not just one. Fall back to B if the sniff
+is messier than expected. C is a bigger product pivot and should not
+be forced by a protocol blocker.
+
+### Sniff-session protocol (when we run it)
+
+See **`docs/ble-sniff-analysis.md`** for the full Claude instruction doc
+(what to read, how to decode, what to produce). Short version:
+
+1. Pair G1 with the official Even Realities app on a fresh install.
+2. Start BLE capture — macOS PacketLogger (Bluetooth Developer Menu),
+   filter ATT handles `0x0403` / `0x0405`, hit Clear right before the
+   test sequence, save when done.
+3. Keep a timestamped log of every action in the Even app (add note,
+   edit, delete, enable stocks, etc.) so packets can be matched to intent.
+4. Hand the `.pklg` + timestamp log to Claude with the instruction doc —
+   it will decode, update `docs/G1_PROTOCOL_REFERENCE.md`, and ship the
+   Swift helpers in one pass.
 
 ## Product decisions (resolved)
 
@@ -197,34 +245,44 @@ calendar pane is already showing it, no Quick Note needed.
 
 ### Phase 1 — Research & Proto helpers
 
-Research tasks (before any code):
-- Read Gadgetbridge G1 driver source for each command family:
-  `0x06 0x01/0x02/0x03/0x06`, `0x1E 0x03/0x07/0x08`.
-- Extend `docs/G1_PROTOCOL_REFERENCE.md` with exact byte layouts.
-- Empirical probes via `BleProbeView`:
-  - Push a single quick note, confirm render in Quick Notes pane.
-  - Push notes at ids 0..N until firmware rejects or wraps — establishes
-    slot cap.
-  - Push a 256 / 1024 / 4096-byte note body — establishes char cap +
-    word-wrap behavior.
-  - Push rapid successive updates to the same note id — establishes
-    update rate limits / visual flicker.
-  - Push a long AI-style response (500-2000 words) — confirms whether
-    firmware can hold a full Claude response or we need chunking /
-    summarization.
+**Phase 1a (complete):** byte layouts for the three `0x06` commands are
+pinned. See `docs/G1_PROTOCOL_REFERENCE.md`.
 
-Code changes (after research):
+**Phase 1b (blocked):** Quick-Notes layout needs a BLE sniff session with
+the official Even Realities app. Until that lands, the quick-note helpers
+in the shopping list below are not implementable.
+
+**Phase 1c — empirical probes via `BleProbeView`** (once quick-note layout is
+known):
+- Push a single quick note, confirm render in Quick Notes pane.
+- Push notes at ids 0..N until firmware rejects or wraps — establishes
+  slot cap.
+- Push a 256 / 1024 / 4096-byte note body — establishes char cap +
+  word-wrap behavior.
+- Push rapid successive updates to the same note id — establishes
+  update rate limits / visual flicker.
+- Push a long AI-style response (500-2000 words) — confirms whether
+  firmware can hold a full Claude response or we need chunking /
+  summarization.
+
+Code changes:
+
+**Shippable now** (Gadgetbridge-pinned):
 - Add helpers in `COGOS/Protocol/Proto.swift`:
   ```swift
   func setDashboardTimeAndWeather(now: Date, weather: WeatherInfo) async
   func setDashboardCalendar(_ events: [CalendarEvent]) async
   func setDashboardMode(_ mode: DashboardMode, paneMode: DashboardPaneMode) async
+  ```
+- New file: `COGOS/Protocol/DashboardTypes.swift` for `DashboardMode`,
+  `DashboardPaneMode`, `WeatherId`, `CalendarEvent`, `WeatherInfo` structs.
+
+**Deferred until sniff complete:**
+  ```swift
   func addQuickNote(id: UInt8, title: String, body: String) async
   func updateQuickNote(id: UInt8, title: String, body: String) async
   func deleteQuickNote(id: UInt8) async
   ```
-- New file: `COGOS/Protocol/DashboardTypes.swift` for `DashboardMode`,
-  `DashboardPaneMode`, `WeatherId`, `CalendarEvent`, `WeatherInfo` structs.
 
 ### Phase 2 — Dual-push (bitmap + firmware, with a flag)
 

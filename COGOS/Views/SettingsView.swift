@@ -20,6 +20,20 @@ struct SettingsView: View {
                         Task { await appState.proto.setHeadUpAngle(new) }
                     }
             }
+            Section(
+                header: Text("Experimental"),
+                footer: Text("Pushes time/weather + calendar to the firmware dashboard instead of rendering a bitmap. Requires reconnect to set dashboard mode.")
+            ) {
+                Toggle("Use firmware dashboard", isOn: $settings.useFirmwareDashboard)
+                    .onChange(of: settings.useFirmwareDashboard) { on in
+                        Task {
+                            if on {
+                                _ = await appState.proto.setDashboardMode(.dual, paneMode: .calendar)
+                            }
+                            await appState.glance.refresh()
+                        }
+                    }
+            }
         }
         .navigationTitle("Settings")
     }

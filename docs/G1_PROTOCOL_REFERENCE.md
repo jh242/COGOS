@@ -19,10 +19,18 @@ Realities EvenDemoApp.
 | BLE service (Nordic UART) | `6e400001-b5a3-f393-e0a9-e50e24dcca9e` |
 | TX characteristic (write) | `6e400002-b5a3-f393-e0a9-e50e24dcca9e` |
 | RX characteristic (notify) | `6e400003-b5a3-f393-e0a9-e50e24dcca9e` |
+| ATT write handle — left arm  | `0x0403` |
+| ATT write handle — right arm | `0x0405` |
 | MTU | 251 |
 | Max payload size | 180 bytes (observed firmware limit) |
 | Heartbeat interval | 8 s (glasses disconnect at ~32 s idle) |
 | Device name format | `G1_XX_[L\|R]_YYYYY` |
+
+**Wireshark filter for G1 downlink (phone → glasses) only:**
+```
+btatt.handle == 0x0403 || btatt.handle == 0x0405
+```
+Add `&& btatt.opcode == 0x52` to narrow to Write Commands only.
 
 ---
 
@@ -194,6 +202,85 @@ The upper 4 bits encode display status; lower 4 bits encode the action.
 | `0x06` | `MODE` |
 | `0x07` | `MAP` |
 
+Byte layouts pinned from Gadgetbridge
+(`G1Communications.java`, `G1Constants.java`):
+
+#### `0x06 0x01 TIME_AND_WEATHER` — fixed 21-byte packet
+
+```
+[0]    0x06                   DASHBOARD_SET
+[1]    0x15                   total packet length (21), not a payload-length
+[2]    0x00                   pad / reserved
+[3]    seq : u8               command sequence id
+[4]    0x01                   TIME_AND_WEATHER
+[5..8]  unix_seconds : u32 LE   (= timeMs / 1000)
+[9..16] unix_millis  : u64 LE
+[17]   weather_icon : u8      (see WeatherId)
+[18]   temp_celsius : i8      signed; Kelvin − 273
+[19]   unit : u8              0x00 = °C, 0x01 = °F (display only)
+[20]   hour_fmt : u8          0x00 = 12h, 0x01 = 24h
+```
+
+Quirk: firmware re-maps `SUNNY (0x10)` → `NIGHT (0x01)` based on sunrise/sunset
+vs. the supplied timestamp (Gadgetbridge mirrors this; we should match).
+
+#### `0x06 0x03 CALENDAR` — chunked TLV
+
+Per-chunk wire header (9 bytes):
+
+```
+[0] 0x06                  DASHBOARD_SET
+[1] chunk_length : u8     this chunk's total length incl. header
+[2] 0x00
+[3] seq : u8              per-chunk sequence id
+[4] 0x03                  CALENDAR
+[5] chunk_count : u8      total number of chunks
+[6] 0x00
+[7] chunk_index : u8      **1-based** (first chunk = 1)
+[8] 0x00
+[9..] body_slice
+```
+
+Body (before chunking):
+
+```
+0x01 0x03 0x03            3 magic prefix bytes (purpose unknown per Gadgetbridge)
+event_count : u8          min(events.count, 8); if 0, written as 1 + dummy event
+per event (TLV):
+  0x01 len:u8 title_utf8
+  0x02 len:u8 time_str_utf8     pre-formatted by app ("HH:mm" / "h:mma" / …)
+  0x03 len:u8 location_utf8
+```
+
+Chunking: max body per chunk = `180 − 9 = 171` bytes. Firmware renders
+`time_str` verbatim — it does not parse timestamps. Events auto-clear 5 min
+after start time. Empty-events case: one dummy event
+`0x01 <len> "No events" 0x02 0x00 0x03 0x00`.
+
+#### `0x06 0x06 MODE` — fixed 7-byte packet
+
+```
+[0] 0x06                  DASHBOARD_SET
+[1] 0x07                  total length = 7
+[2] 0x00
+[3] seq : u8
+[4] 0x06                  MODE
+[5] mode : u8             FULL=0x00 | DUAL=0x01 | MINIMAL=0x02
+[6] secondary_pane : u8   QUICK_NOTES=0x00 | STOCKS=0x01 | NEWS=0x02 |
+                          CALENDAR=0x03 | MAP=0x04 | EMPTY=0x05
+```
+
+`secondary_pane` is always written, even in FULL/MINIMAL modes — pass
+`EMPTY` when you don't care (Gadgetbridge pattern).
+
+#### `0x06 0x04 STOCKS` and `0x06 0x05 NEWS` — layouts unknown
+
+Declared in `G1Constants.java:208-209` and never serialized. Same public-source
+gap as the `0x1E` Quick Notes family — the firmware has the panes (addressable
+via `DashboardPaneMode.STOCKS = 0x01` and `DashboardPaneMode.NEWS = 0x02`) but
+no app implements the payload. Pinning needs a BLE sniff against the official
+Even Realities app.
+
 ### DashboardQuickNoteSubcommand (second byte after `0x1E`)
 
 | Byte | Name |
@@ -208,7 +295,26 @@ The upper 4 bits encode display status; lower 4 bits encode the action.
 | `0x09` | *Unknown* |
 | `0x0A` | `NOTE_STATUS_EDIT_2` |
 
+**⚠ Payload layouts for `0x1E` sub-commands are NOT documented in any public
+source.** Gadgetbridge, MentraOS, and the official `EvenDemoApp` all declare
+the sub-command constants but none implement a serializer. Gadgetbridge's
+own comment at `G1Constants.java:220` is speculative ("Does this delete the
+metadata?"). To pin these down we need to sniff traffic from the official
+Even Realities app while it adds / edits / deletes a quick note. Until
+then, treat Quick Notes as unimplementable.
+
+That the spec/firmware-features docs reference a concrete payload shape
+for `0x1E 0x03` (add/update/delete sub-sub-commands, note-id) was based on
+inference from the constant names, not on traced bytes.
+
 Max calendar events: 8 (4 pages × 2 events).
+
+### `0x58 DASHBOARD_CALENDAR_NEXT_UP_SET` — layout unknown
+
+Declared in `G1Constants.java:140` and never used in Gadgetbridge,
+MentraOS, or the EvenDemoApp. Name suggests a dedicated "next up" pane
+distinct from the 8-event list in `0x06 0x03`. Also needs live sniffing
+before we can touch it.
 
 ---
 

@@ -6,6 +6,7 @@ actor Proto {
     private let queue: BleRequestQueue
     private var evenaiSeq: Int = 0
     private var beatHeartSeq: Int = 0
+    private var dashboardSeq: UInt8 = 0
 
     init(queue: BleRequestQueue) {
         self.queue = queue
@@ -93,6 +94,38 @@ actor Proto {
     func queryBatteryAndFirmware() async {
         let data = Data([0x2C, 0x01])
         _ = await queue.sendBoth(data)
+    }
+
+    // MARK: - Firmware dashboard (0x06 family)
+
+    /// Push time + weather to the firmware dashboard pane. Replaces our own
+    /// bitmap-rendered time/weather column.
+    @discardableResult
+    func setDashboardTimeAndWeather(now: Date = Date(), weather: WeatherInfo) async -> Bool {
+        let seq = dashboardSeq; dashboardSeq = dashboardSeq &+ 1
+        let pack = DashboardProto.timeAndWeatherPacket(now: now, weather: weather, seq: seq)
+        return await queue.sendBoth(pack)
+    }
+
+    /// Configure dashboard layout + secondary pane. Secondary pane byte is
+    /// always written — pass `.empty` when `mode` is not `.dual`.
+    @discardableResult
+    func setDashboardMode(_ mode: DashboardMode, paneMode: DashboardPaneMode) async -> Bool {
+        let seq = dashboardSeq; dashboardSeq = dashboardSeq &+ 1
+        let pack = DashboardProto.modePacket(mode, paneMode: paneMode, seq: seq)
+        return await queue.sendBoth(pack)
+    }
+
+    /// Push up to 8 calendar events to the firmware calendar pane. Firmware
+    /// renders `timeString` verbatim — it does not parse timestamps.
+    @discardableResult
+    func setDashboardCalendar(_ events: [CalendarEvent]) async -> Bool {
+        let (packets, nextSeq) = DashboardProto.calendarPackets(events, startingSeq: dashboardSeq)
+        dashboardSeq = nextSeq
+        // Send L then R sequentially, matching the existing 0x4E pattern.
+        let okL = await queue.requestList(packets, lr: "L")
+        guard okL else { return false }
+        return await queue.requestList(packets, lr: "R")
     }
 
     /// Exit to dashboard.

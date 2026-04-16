@@ -14,6 +14,10 @@ final class CalendarSource: GlanceSource {
     private var accessGranted: Bool?
     private var cachedEvents: [EKEvent] = []
 
+    /// Firmware-dashboard-ready events (first 8). Populated alongside
+    /// `cachedEvents` during `fetch`.
+    private(set) var lastEvents: [CalendarEvent] = []
+
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "H:mm"
@@ -26,11 +30,21 @@ final class CalendarSource: GlanceSource {
     }
 
     func fetch(context: GlanceContext) async -> String? {
-        guard let events = await upcomingEvents(limit: 5), !events.isEmpty else {
+        // Pull up to 8 for the firmware calendar pane (hard cap); bitmap
+        // renderer only uses the first ~3.
+        guard let events = await upcomingEvents(limit: 8), !events.isEmpty else {
             cachedEvents = []
+            lastEvents = []
             return nil
         }
         cachedEvents = events
+        lastEvents = events.map { ev in
+            CalendarEvent(
+                title: ev.title ?? "Untitled",
+                timeString: Self.timeFormatter.string(from: ev.startDate),
+                location: ev.location ?? ""
+            )
+        }
         let lines = events.prefix(3).map { ev in
             "- \(Self.timeFormatter.string(from: ev.startDate)) \(ev.title ?? "Untitled")"
         }

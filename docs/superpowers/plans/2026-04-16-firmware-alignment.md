@@ -10,113 +10,108 @@ and "plan together".
 
 - [x] **#6 silent-mode side-effect** — GestureRouter no longer resets session
       on `0xF5 0x04/0x05`. Patched during the simplify pass.
-- [ ] **#3 wear-state auto-show/hide** — low-hanging fruit, implementing now.
-- [ ] **#4 battery/case observable** — low-hanging fruit, implementing now.
-- [ ] **#1 firmware dashboard hybrid** — plan together.
-- [ ] **#2 NCS notification passthrough** — plan together.
-- [ ] **#5 expose additional settings** — plan together (UI scope).
-- [ ] **#6 triple-tap mode cycle** — plan together (product decision).
+- [x] **#3 wear-state auto-show/hide** — `GestureRouter` handles
+      `0xF5 0x06/0x07/0x08`; `Proto.setWearDetection(enabled:)` called on
+      connect from `AppState`. Debounce is **not** yet implemented; both arms
+      fire events and can double-trigger `showGlance()`. See follow-ups below.
+- [x] **#4 battery/case observable** — `BluetoothManager.BatteryState`
+      published; `GestureRouter` parses `0xF5 0x09/0x0A/0x0E/0x0F` with full
+      payload; `Proto.queryBatteryAndFirmware()` seeds on connect. No UI
+      surface yet — debug-only observability.
+- [>] **#1 firmware dashboard hybrid** — superseded by
+      [`2026-04-16-firmware-dashboard-migration.md`](./2026-04-16-firmware-dashboard-migration.md),
+      which takes a more aggressive "retire the bitmap" stance with
+      phased rollout. Follow that plan; the thumbnail below is kept for
+      cross-reference only.
+- [ ] **#2 NCS notification passthrough** — **blocked on iOS capability.**
+      Third-party apps cannot read other apps' notifications without MDM or
+      jailbreak. A Notification Service Extension only touches pushes sent to
+      COGOS itself. Revisit only if we find a product use for forwarding
+      COGOS's own notifications, otherwise defer indefinitely.
+- [ ] **#5 expose additional settings** — plan together (UI scope). No
+      blockers; waiting on #1 to land so we don't design around a doomed
+      glance surface.
+- [ ] **#6 triple-tap mode cycle** — product decision. `SessionMode` enum
+      still lacks `cowork` (`COGOS/Session/SessionMode.swift`) despite
+      `CLAUDE.md` documenting it. Doc/code drift to resolve as part of this.
 - [ ] **#7 teleprompter/transcribe/translate/navigation** — deferred per spec.
 
 ---
 
-## Low-hanging fruit (implementing now)
+## Shipped
 
-### #3 — Wear-state auto-show/hide
+### #3 — Wear-state auto-show/hide (shipped)
 
-Firmware emits `0xF5` events we currently discard:
-- `0x06` STATE_WORN → show glance
-- `0x07` STATE_NOT_WORN_NO_CASE → dismiss glance
-- `0x08` STATE_IN_CASE_LID_OPEN → dismiss (glasses are in the case)
-- `0x0B` STATE_IN_CASE_LID_CLOSED → no-op
+Implementation landed in:
+- `COGOS/BLE/GestureRouter.swift:46-54` — `0x06` shows glance,
+  `0x07`/`0x08` dismiss + exit session.
+- `COGOS/Protocol/Proto.swift:87-90` — `setWearDetection(enabled:)`.
+- `COGOS/App/AppState.swift:92` — enabled on connect.
 
-Requires sending `0x27 WEAR_DETECTION_SET` once on connect, otherwise the
-firmware may not emit these events. Command shape (per Gadgetbridge):
-`0x27 <enable 0x00/0x01>`.
+**Follow-ups not yet done:**
+- No debounce across L/R arms. Both emit wear events; the current handler
+  races. Low-risk today because `glance.showGlance()` and `session.exitAll()`
+  are idempotent-ish, but flicker is possible. Add a 200-300 ms debounce in
+  `GestureRouter` keyed on `(notifyIndex)`, ignoring the second arm.
+- When #1 (firmware dashboard) lands, "show glance" will mean something
+  different. The wear handler will need a one-line swap from bitmap-glance
+  to firmware-dashboard show.
 
-Both arms emit wear events — treat first one in a short window as the
-canonical signal; debounce to avoid double-show.
+### #4 — Battery / case state observable (shipped)
 
-### #4 — Battery / case state observable
+Implementation landed in:
+- `COGOS/BLE/BluetoothManager.swift:28-42` — `BatteryState` struct published.
+- `COGOS/BLE/GestureRouter.swift:55-69` — parses `0x09/0x0A/0x0E/0x0F`.
+- `COGOS/Protocol/Proto.swift:93-95` — `queryBatteryAndFirmware()`.
+- `COGOS/App/AppState.swift:93` — seeded on connect.
 
-Firmware emits battery telemetry via `0xF5` already:
-- `0x09` STATE_CHARGING, payload `0x00`/`0x01`
-- `0x0A` INFO_BATTERY_LEVEL, payload `0x00–0x64` (0–100 %)
-- `0x0E` STATE_CASE_CHARGING
-- `0x0F` INFO_CASE_BATTERY_LEVEL
-
-Each arm reports independently. Add a `BatteryState` struct on
-`BluetoothManager`:
-```swift
-struct BatteryState {
-    var leftPercent: Int?
-    var rightPercent: Int?
-    var casePercent: Int?
-    var leftCharging: Bool
-    var rightCharging: Bool
-    var caseCharging: Bool
-}
-```
-Published so `SettingsView` / a debug surface can observe.
-
-On connect, also kick off `0x2C INFO_BATTERY_AND_FIRMWARE_GET` once to seed
-initial values instead of waiting for the first firmware-emitted tick.
-
-**Plumbing change:** GestureRouter currently receives only
-`(lr, notifyIndex)`. Needs full payload for 0x0A / 0x0F (second byte = level).
-Change the signature to pass the entire packet data.
+**Follow-ups not yet done:**
+- No UI surface. `SettingsView` is the natural home; gated on #5 scope.
+- `0x2C` response parsing: we send the query but I haven't traced that the
+  firmware response actually lands in `BatteryState` (the `0xF5` telemetry
+  path does, but the `0x2C` reply is a different frame). Verify end-to-end
+  once the UI lands.
 
 ---
 
 ## Plan-together items
 
-### #1 — Firmware dashboard hybrid
+### #1 — Firmware dashboard (see separate plan)
 
-The glasses natively render time + weather + up to 8 calendar events. Sending
-one `0x06 0x01` (time+weather) + one `0x06 0x03` (calendar, chunked) packet
-replaces our current 16 KB BMP upload every 60 s.
+**Superseded by [`2026-04-16-firmware-dashboard-migration.md`](./2026-04-16-firmware-dashboard-migration.md).**
+That plan takes a stronger position than "hybrid": retire the bitmap glance
+entirely, push time/weather/calendar via `0x06` family, push contextual
+sources (transit, notifications) via `0x1E` Quick Notes, keep AI responses
+on `0x4E`. Five phases, flag-gated rollout, verification checklist.
 
-**Open questions:**
-- Keep bitmap path for transit / notifications / news (sources with no
-  firmware pane), and swap only when *none* are winning?
-- What happens to left-column fixed sources (time, weather) when a
-  contextual source wins — still our bitmap, or firmware layered?
-- How do we unify dismiss? `0x18` exits our bitmap; what's the equivalent
-  for a firmware dashboard that was shown programmatically?
-- Timezone: firmware time pane uses its own clock. We currently push our
-  own; delta is usually seconds but not zero.
+Open questions from earlier drafts (kept here for cross-reference):
+- Bitmap-for-contextual hybrid vs. Quick-Notes-only → dashboard plan picks
+  Quick Notes.
+- Dismiss unification → dashboard plan treats it as cadence-driven, no
+  programmatic dismiss needed.
+- Timezone drift → punt to firmware clock once migration lands.
 
-**Effort:** Medium. Touches `GlanceService.sendBitmap()` split, new `Proto`
-helpers for the 0x06 family, careful state management for which surface is
-currently displayed.
+### #2 — NCS notification passthrough (blocked on iOS)
 
-### #2 — NCS notification passthrough
+**Status: blocked.** iOS does not let a third-party app read other apps'
+notifications. A Notification Service Extension only intercepts push
+notifications delivered to *our* app, not system-wide. Without MDM
+enrollment or jailbreak, the entire premise of "forward iOS notifications
+to the glasses" is not achievable on stock iOS.
 
-Forward iOS `UNUserNotificationCenter` deliveries through
-`0x4B NOTIFICATION_SEND_CONTROL` instead of re-rendering into the glance.
+What this means:
+- Options listed in earlier drafts (NSE, mirror-own-only, Focus/Live
+  Activities) either don't apply or give a surface too small to justify
+  the work.
+- The `0x4B` BLE plumbing is still correct — that side of the work would
+  be straightforward whenever we *do* have a notification source to feed.
+- `NotificationWhitelist` (`0x04`) is already in the codebase and is used
+  by the *firmware's* NCS consumer — unrelated to our ability to feed it.
 
-Payload shape (chunked via existing `getNotifyPackList`):
-```json
-{"ncs_notification": {
-    "msg_id": 1234, "app_identifier": "com.apple.mobilemail",
-    "title": "…", "subtitle": "…", "message": "…",
-    "display_name": "Mail", "time_s": 1712944080
-}}
-```
-
-**Open questions:**
-- Where does the notification feed come from? iOS does NOT deliver
-  notifications-for-other-apps to a third-party app. Options:
-  - Require users to install an NCS-enabled Notification Service Extension
-    (limited — only our own notifications)
-  - Mirror only our own app notifications (trivial but tiny surface)
-  - Use iOS Focus / Live Activities indirectly (unclear feasibility)
-- Dismiss path: `0x4C NOTIFICATION_CLEAR_CONTROL <msg_id>` — needs a
-  bidirectional map from OS notification identifiers to msg_ids.
-- `NotificationWhitelist` already sends the `0x04` side; reuse the same
-  app bundle IDs for filter logic.
-
-**Effort:** Medium–Large. The iOS side is the hard part, not the BLE side.
+**Recommendation:** park this item. If COGOS later sends its own push
+notifications to itself (e.g. relay-status alerts), we can forward those
+— but mirror-our-own-pushes is a tiny surface and doesn't justify the
+`UNUserNotificationCenterDelegate` plumbing yet.
 
 ### #5 — Expose additional settings
 
@@ -130,9 +125,14 @@ Settings to add to `SettingsView` (and corresponding `Proto` helpers):
 | Silent mode | `0x03 <0/1>` | Toggle |
 | Language | `0x3D <enum 0..7>` | Picker |
 | Display height (Y) | `0x26 0x02 <height>` | Slider, 5 s preview |
-| Display depth (Z) | `0x26 0x02 <depth>` | Slider |
+| Display depth (Z) | `0x26 0x0?`¹ `<depth>` | Slider |
 | Double-tap action | `0x26 0x05 <action>` | Picker |
 | Long-press action | `0x26 0x07 <action>` | Picker |
+
+¹ The Y/Z sub-command bytes need pinning from Gadgetbridge — earlier
+drafts listed both as `0x26 0x02` which is clearly wrong (two different
+settings cannot share a sub-command). Likely `0x02` = height and depth
+is a neighbouring sub-command, but confirm before UI work.
 
 **Open questions:**
 - Do we want to persist each setting in `UserDefaults` and re-apply on
@@ -156,8 +156,10 @@ it to feel native.
   to include triple-tap, but also any other silent-mode trigger.
 
 **Product decisions needed:**
-- Add `cowork` to `SessionMode`? If yes, wire system prompt + history
-  persistence per the CLAUDE.md table.
+- Add `cowork` to `SessionMode`? `CLAUDE.md` documents it but
+  `COGOS/Session/SessionMode.swift` still only has `chat`/`code`. Doc/code
+  drift to resolve as part of this decision. If yes, wire system prompt +
+  history persistence per the CLAUDE.md table.
 - Accept `0x04/0x05` as the trigger (pragmatic — it fires on triple-tap),
   or rebind via `0x26 0x05/0x07` to a clean user action?
 - Cycle order: `chat → code → cowork → chat`? Or mode-per-arm?

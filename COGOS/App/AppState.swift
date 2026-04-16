@@ -31,7 +31,8 @@ final class AppState: ObservableObject {
         let proto = Proto(queue: requestQueue)
         let session = EvenAISession(proto: proto, speech: speech, settings: settings)
         let glance = GlanceService(proto: proto, location: location, session: session,
-                                    requestQueue: requestQueue, bluetooth: bluetooth)
+                                    requestQueue: requestQueue, bluetooth: bluetooth,
+                                    settings: settings)
         let gestureRouter = GestureRouter(session: session, glance: glance, bluetooth: bluetooth)
 
         self.settings = settings
@@ -91,6 +92,12 @@ final class AppState: ObservableObject {
                 await proto.setHeadUpAngle(settings.headUpAngle)
                 await proto.setWearDetection(enabled: true)
                 await proto.queryBatteryAndFirmware()
+                if settings.useFirmwareDashboard {
+                    // Phase 2: configure DUAL dashboard with the calendar
+                    // pane we can populate. Quick Notes/News/Stocks panes
+                    // remain blocked on the sniff session.
+                    _ = await proto.setDashboardMode(.dual, paneMode: .calendar)
+                }
             }
         case .disconnected, .scanning, .connecting:
             stopHeartbeat()

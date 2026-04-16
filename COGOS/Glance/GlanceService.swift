@@ -13,9 +13,11 @@ final class GlanceService: ObservableObject {
     private let location: NativeLocation
     private let bmpTransfer: BmpTransfer
     private weak var session: EvenAISession?
+    private weak var settings: Settings?
 
     private var sources: [GlanceSource] = []
     private var weatherSource: WeatherSource?
+    private var calendarSource: CalendarSource?
     private var sourceCache: [String: (String, Date)] = [:]
     private var refreshTimer: Task<Void, Never>?
     private var isRefreshing = false
@@ -28,21 +30,25 @@ final class GlanceService: ObservableObject {
     @Published var isShowing = false
 
     init(proto: Proto, location: NativeLocation, session: EvenAISession,
-         requestQueue: BleRequestQueue, bluetooth: BluetoothManager) {
+         requestQueue: BleRequestQueue, bluetooth: BluetoothManager,
+         settings: Settings) {
         self.proto = proto
         self.location = location
         self.session = session
+        self.settings = settings
         self.bmpTransfer = BmpTransfer(queue: requestQueue, bluetooth: bluetooth)
         buildSources()
     }
 
     private func buildSources() {
         let weather = WeatherSource(location: location)
+        let calendar = CalendarSource()
         weatherSource = weather
+        calendarSource = calendar
         sources = [
             TimeSource(),
             weather,
-            CalendarSource(),
+            calendar,
             TransitSource(location: location),
             NotificationSource(),
             NewsSource()
@@ -111,6 +117,21 @@ final class GlanceService: ObservableObject {
                 }
             }
         }
+
+        // Firmware-dashboard mode: push pinned panes each tick. Contextual
+        // sources (transit/notifications) still lack firmware pane support
+        // pending the Quick Notes sniff — see the dashboard-migration plan.
+        if settings?.useFirmwareDashboard == true {
+            await pushFirmwareDashboard(now: now)
+        }
+    }
+
+    private func pushFirmwareDashboard(now: Date) async {
+        if let info = weatherSource?.lastWeatherInfo {
+            _ = await proto.setDashboardTimeAndWeather(now: now, weather: info)
+        }
+        let events = calendarSource?.lastEvents ?? []
+        _ = await proto.setDashboardCalendar(events)
     }
 
     /// Fetch a source, honoring its cacheDuration.
@@ -128,15 +149,19 @@ final class GlanceService: ObservableObject {
 
     func showGlance() async {
         guard !(session?.isRunning ?? false) else { return }
+        // Firmware mode is cadence-driven; user invokes the dashboard via
+        // firmware gestures (double-tap / head-up). Phase 2 Q2 decision.
+        if settings?.useFirmwareDashboard == true { return }
         await sendBitmap()
         isShowing = true
     }
 
     func forceRefreshAndShow() async {
         guard !(session?.isRunning ?? false) else { return }
-        isShowing = true
         sourceCache.removeAll()
         await refresh()
+        if settings?.useFirmwareDashboard == true { return }
+        isShowing = true
         await sendBitmap()
     }
 
