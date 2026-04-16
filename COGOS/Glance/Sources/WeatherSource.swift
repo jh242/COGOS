@@ -1,6 +1,6 @@
 import Foundation
 
-struct WeatherSource: GlanceSource {
+final class WeatherSource: GlanceSource {
     let name = "weather"
     var enabled = true
     var cacheDuration: TimeInterval = 900
@@ -8,8 +8,16 @@ struct WeatherSource: GlanceSource {
 
     let location: NativeLocation
 
+    /// Structured weather data from the last successful fetch.
+    private(set) var lastWeather: (temp: String, condition: String)?
+
+    init(location: NativeLocation) {
+        self.location = location
+    }
+
     func fetch(context: GlanceContext) async -> String? {
-        var loc = context.userLocation ?? await location.requestLocation()
+        var loc = context.userLocation
+        if loc == nil { loc = await location.requestLocation() }
         guard let loc = loc else { return nil }
 
         let lat = loc.coordinate.latitude
@@ -27,6 +35,16 @@ struct WeatherSource: GlanceSource {
         guard let body = String(data: data, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
               !body.isEmpty else { return nil }
+
+        // Parse "+8°C Partly cloudy" into temperature + condition.
+        if let degRange = body.range(of: "°C") ?? body.range(of: "°F") {
+            let temp = String(body[..<degRange.upperBound]).trimmingCharacters(in: .whitespaces)
+            let condition = String(body[degRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+            lastWeather = (temp: temp, condition: condition)
+        } else {
+            lastWeather = (temp: "", condition: body)
+        }
+
         return "Weather: \(body)"
     }
 }

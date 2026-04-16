@@ -1,8 +1,7 @@
 import Foundation
 import Combine
 
-/// Top-level holder of long-lived app services. Replaces the Dart `App` singleton
-/// and the various `GetX` globals (`EvenAI.get`, `GlanceService.get`, etc.).
+/// Top-level holder of long-lived app services.
 @MainActor
 final class AppState: ObservableObject {
     let bluetooth: BluetoothManager
@@ -31,8 +30,9 @@ final class AppState: ObservableObject {
         let requestQueue = BleRequestQueue(bluetooth: bluetooth)
         let proto = Proto(queue: requestQueue)
         let session = EvenAISession(proto: proto, speech: speech, settings: settings)
-        let glance = GlanceService(proto: proto, location: location, session: session)
-        let gestureRouter = GestureRouter(session: session, glance: glance)
+        let glance = GlanceService(proto: proto, location: location, session: session,
+                                    requestQueue: requestQueue, bluetooth: bluetooth)
+        let gestureRouter = GestureRouter(session: session, glance: glance, bluetooth: bluetooth)
 
         self.settings = settings
         self.history = history
@@ -60,7 +60,7 @@ final class AppState: ObservableObject {
                 guard let self = self else { return }
                 if packet.data.first == 0xF5, packet.data.count >= 2 {
                     Task { @MainActor in
-                        self.gestureRouter.handle(lr: packet.lr, notifyIndex: packet.data[1])
+                        self.gestureRouter.handle(lr: packet.lr, data: packet.data)
                     }
                 } else {
                     self.requestQueue.deliver(packet: packet)
@@ -89,6 +89,8 @@ final class AppState: ObservableObject {
             Task {
                 await whitelist.pushToGlasses(proto: proto)
                 await proto.setHeadUpAngle(settings.headUpAngle)
+                await proto.setWearDetection(enabled: true)
+                await proto.queryBatteryAndFirmware()
             }
         case .disconnected, .scanning, .connecting:
             stopHeartbeat()

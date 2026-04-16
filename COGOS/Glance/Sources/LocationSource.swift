@@ -1,13 +1,17 @@
 import Foundation
 
-struct LocationSource: GlanceSource {
+final class LocationSource: GlanceSource {
     let name = "location"
     var enabled = true
     var cacheDuration: TimeInterval = 60
 
     let location: NativeLocation
 
-    func fetch() async -> String? {
+    init(location: NativeLocation) {
+        self.location = location
+    }
+
+    func fetch(context: GlanceContext) async -> String? {
         let perm = location.checkPermission()
         if perm == .notDetermined {
             location.requestPermission()

@@ -1,14 +1,16 @@
+import CoreGraphics
+import CoreText
 import Foundation
 
-struct NewsSource: GlanceSource {
+final class NewsSource: GlanceSource {
     let name = "news"
     var enabled = true
     var cacheDuration: TimeInterval = 1800
     var tier: GlanceTier = .fallback
 
-    /// Google News RSS topic. BUSINESS gives Bloomberg / Reuters / WSJ / FT / CNBC aggregated.
-    /// Other usable values: WORLD, NATION, TECHNOLOGY, SCIENCE, SPORTS, HEALTH, ENTERTAINMENT.
     var topic: String = "BUSINESS"
+
+    private var cachedHeadlines: [String] = []
 
     func fetch(context: GlanceContext) async -> String? {
         let urlStr = "https://news.google.com/rss/headlines/section/topic/\(topic)?hl=en-US&gl=US&ceid=US:en"
@@ -20,13 +22,33 @@ struct NewsSource: GlanceSource {
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
 
         let titles = GoogleNewsRSSParser.parseItemTitles(data)
-        guard !titles.isEmpty else { return nil }
+        guard !titles.isEmpty else {
+            cachedHeadlines = []
+            return nil
+        }
 
-        let headlines = titles.prefix(3).map { "- \(cleanTitle($0))" }
+        cachedHeadlines = titles.prefix(5).map { cleanTitle($0) }
+        let headlines = cachedHeadlines.prefix(3).map { "- \($0)" }
         return "News:\n\(headlines.joined(separator: "\n"))"
     }
 
-    /// Google News titles look like "Headline text - Source Name". Strip the trailing source.
+    func drawContent(in rect: CGRect, context: CGContext) -> Bool {
+        guard !cachedHeadlines.isEmpty else { return false }
+        let font = CTFontCreateWithName("SFProDisplay-Regular" as CFString, 19, nil)
+
+        var y = rect.maxY - 8
+        for headline in cachedHeadlines {
+            let truncated = GlanceDrawing.truncateToFit(headline, font: font, maxWidth: rect.width)
+            y = GlanceDrawing.drawText(
+                truncated, at: CGPoint(x: rect.minX, y: y),
+                font: font, in: context
+            )
+            y -= 8
+            if y < rect.minY + 10 { break }
+        }
+        return true
+    }
+
     private func cleanTitle(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if let dashRange = trimmed.range(of: " - ", options: .backwards) {

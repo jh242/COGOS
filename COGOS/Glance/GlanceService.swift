@@ -1,37 +1,47 @@
 import Foundation
 
-/// Context-aware glance HUD.
+/// Context-aware glance HUD rendered as a bitmap.
 ///
 /// Rendering policy:
-///   line 1-2  → fixed sources (time, weather) always shown
-///   line 3-5  → one contextual source chosen by relevance/priority
-///               (calendar → transit → notifications), falling back to news
-///               if nothing contextual is relevant right now.
+///   Left column  → fixed sources (time, weather) always shown
+///   Right column → one contextual source chosen by relevance/priority
+///                  (calendar → transit → notifications), falling back to news
+///                  if nothing contextual is relevant right now.
 @MainActor
 final class GlanceService: ObservableObject {
     private let proto: Proto
     private let location: NativeLocation
+    private let bmpTransfer: BmpTransfer
     private weak var session: EvenAISession?
 
     private var sources: [GlanceSource] = []
-    private var cachedLines: [String] = []
+    private var weatherSource: WeatherSource?
     private var sourceCache: [String: (String, Date)] = [:]
     private var refreshTimer: Task<Void, Never>?
     private var isRefreshing = false
 
+    private var winningSource: GlanceSource?
+    private var winningSourceText: String?
+
+    private let renderer = GlanceRenderer()
+
     @Published var isShowing = false
 
-    init(proto: Proto, location: NativeLocation, session: EvenAISession) {
+    init(proto: Proto, location: NativeLocation, session: EvenAISession,
+         requestQueue: BleRequestQueue, bluetooth: BluetoothManager) {
         self.proto = proto
         self.location = location
         self.session = session
+        self.bmpTransfer = BmpTransfer(queue: requestQueue, bluetooth: bluetooth)
         buildSources()
     }
 
     private func buildSources() {
+        let weather = WeatherSource(location: location)
+        weatherSource = weather
         sources = [
             TimeSource(),
-            WeatherSource(location: location),
+            weather,
             CalendarSource(),
             TransitSource(location: location),
             NotificationSource(),
@@ -69,15 +79,14 @@ final class GlanceService: ObservableObject {
         if userLoc == nil { userLoc = await location.requestLocation() }
         let ctx = GlanceContext(now: now, userLocation: userLoc)
 
-        var snippets: [String] = []
-
-        // 1. Fixed tier — always included.
+        // Fetch fixed sources (populates their cached structured data).
         for s in sources where s.enabled && s.tier == .fixed {
-            if let line = await fetchCached(s, now: now, context: ctx) { snippets.append(line) }
+            _ = await fetchCached(s, now: now, context: ctx)
         }
 
-        // 2. Contextual tier — try sources in order of relevance.
-        var pickedContextual = false
+        // Contextual tier — pick the most relevant source.
+        winningSource = nil
+        winningSourceText = nil
         var scored: [(Int, GlanceSource)] = []
         for s in sources where s.enabled && s.tier == .contextual {
             if let p = await s.relevance(ctx) { scored.append((p, s)) }
@@ -85,23 +94,23 @@ final class GlanceService: ObservableObject {
         scored.sort { $0.0 < $1.0 }
 
         for (_, source) in scored {
-            if let line = await fetchCached(source, now: now, context: ctx) {
-                snippets.append(line)
-                pickedContextual = true
+            if let text = await fetchCached(source, now: now, context: ctx) {
+                winningSource = source
+                winningSourceText = text
                 break
             }
         }
 
-        // 3. Fallback tier — only if no contextual source fired.
-        if !pickedContextual {
+        // Fallback tier — only if no contextual source fired.
+        if winningSource == nil {
             for s in sources where s.enabled && s.tier == .fallback {
-                if let line = await fetchCached(s, now: now, context: ctx) {
-                    snippets.append(line); break
+                if let text = await fetchCached(s, now: now, context: ctx) {
+                    winningSource = s
+                    winningSourceText = text
+                    break
                 }
             }
         }
-
-        cachedLines = snippets.isEmpty ? ["No data available"] : snippets
     }
 
     /// Fetch a source, honoring its cacheDuration.
@@ -119,19 +128,16 @@ final class GlanceService: ObservableObject {
 
     func showGlance() async {
         guard !(session?.isRunning ?? false) else { return }
-        let lines = cachedLines.isEmpty ? ["Glance loading..."] : cachedLines
-        await sendToGlasses(lines)
+        await sendBitmap()
         isShowing = true
     }
 
     func forceRefreshAndShow() async {
         guard !(session?.isRunning ?? false) else { return }
-        await sendToGlasses(["Refreshing..."])
         isShowing = true
         sourceCache.removeAll()
         await refresh()
-        let lines = cachedLines.isEmpty ? ["No data available"] : cachedLines
-        await sendToGlasses(lines)
+        await sendBitmap()
     }
 
     func dismiss() {
@@ -140,15 +146,13 @@ final class GlanceService: ObservableObject {
         Task { _ = await proto.exit() }
     }
 
-    private func sendToGlasses(_ lines: [String]) async {
-        var measured: [String] = []
-        for line in lines { measured.append(contentsOf: TextPaginator.measureStringList(line)) }
-        let first5 = Array(measured.prefix(5))
-        let padCount = max(0, 5 - first5.count)
-        let pad = Array(repeating: " \n", count: padCount)
-        let content = first5.map { $0 + "\n" }
-        let screen = (pad + content).joined()
-        _ = await proto.sendEvenAIData(screen, newScreen: 0x01 | 0x70,
-                                       pos: 0, currentPageNum: 1, maxPageNum: 1)
+    private func sendBitmap() async {
+        guard let bmp = renderer.render(
+            time: Date(),
+            weather: weatherSource?.lastWeather,
+            contextualSource: winningSource,
+            contextualFallbackText: winningSourceText
+        ) else { return }
+        _ = await bmpTransfer.sendToBoth(bmp)
     }
 }

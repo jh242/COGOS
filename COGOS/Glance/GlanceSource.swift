@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Where a source sits in the glance priority stack.
@@ -11,7 +12,7 @@ enum GlanceTier {
 }
 
 /// A pluggable source of contextual data for the glance HUD.
-protocol GlanceSource {
+protocol GlanceSource: AnyObject {
     var name: String { get }
     var enabled: Bool { get }
     var cacheDuration: TimeInterval { get }
@@ -20,9 +21,15 @@ protocol GlanceSource {
     /// `fixed` and `fallback` sources can ignore this.
     func relevance(_ ctx: GlanceContext) async -> Int?
     func fetch(context: GlanceContext) async -> String?
+
+    /// Draw this source's content into the given rect of the glance bitmap.
+    /// Return `true` if custom drawing was performed, `false` to fall back
+    /// to plain text rendering of `fetch()` output.
+    func drawContent(in rect: CGRect, context: CGContext) -> Bool
 }
 
 extension GlanceSource {
     var tier: GlanceTier { .contextual }
     func relevance(_ ctx: GlanceContext) async -> Int? { 0 }
+    func drawContent(in rect: CGRect, context: CGContext) -> Bool { false }
 }

@@ -3,11 +3,6 @@ import CoreBluetooth
 import Combine
 
 /// Dual-peripheral BLE manager for Even Realities G1 glasses.
-///
-/// Un-Flutterized port of `ios/Runner/BluetoothManager.swift`. Flutter channels
-/// are replaced by `@Published` state and a `PassthroughSubject` for incoming
-/// non-audio packets. PCM audio frames are pushed directly to
-/// `SpeechStreamRecognizer`.
 final class BluetoothManager: NSObject, ObservableObject {
 
     enum ConnectionState: Equatable {
@@ -30,11 +25,21 @@ final class BluetoothManager: NSObject, ObservableObject {
         let peripheralId: String
     }
 
+    struct BatteryState: Equatable {
+        var leftPercent: Int?
+        var rightPercent: Int?
+        var casePercent: Int?
+        var leftCharging: Bool = false
+        var rightCharging: Bool = false
+        var caseCharging: Bool = false
+    }
+
     // MARK: - Published state
 
     @Published private(set) var connectionState: ConnectionState = .disconnected
     @Published private(set) var pairedDevices: [PairedGlasses] = []
     @Published private(set) var status: String = "Not connected"
+    @Published var battery: BatteryState = BatteryState()
 
     /// Incoming non-audio packets. Consumed by `BleRequestQueue` and gesture router.
     let packets = PassthroughSubject<ReceivedPacket, Never>()

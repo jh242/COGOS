@@ -1,6 +1,6 @@
 import Foundation
 
-struct TimeSource: GlanceSource {
+final class TimeSource: GlanceSource {
     let name = "time"
     var enabled = true
     var cacheDuration: TimeInterval = 0

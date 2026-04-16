@@ -83,6 +83,18 @@ actor Proto {
         _ = await queue.sendBoth(data)
     }
 
+    /// Enable/disable on-device wear detection. Prerequisite for 0xF5 0x06/0x07.
+    func setWearDetection(enabled: Bool) async {
+        let data = Data([0x27, enabled ? 0x01 : 0x00])
+        _ = await queue.sendBoth(data)
+    }
+
+    /// Query battery + firmware. Each arm replies with its own 0x2C payload.
+    func queryBatteryAndFirmware() async {
+        let data = Data([0x2C, 0x01])
+        _ = await queue.sendBoth(data)
+    }
+
     /// Exit to dashboard.
     @discardableResult
     func exit() async -> Bool {

@@ -15,13 +15,12 @@
 		126BDE5DF41E376DD054E8D6 /* CalendarSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C4E740E4008CAB936BA5EC /* CalendarSource.swift */; };
 		17DDF2C02C3462E72C75DDF5 /* NotificationSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2050FB1FD7A27BF2158CE35D /* NotificationSource.swift */; };
 		1F4A6C183C2A579E75C77B21 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5FFC7DA5A8E8B87E1363FF0 /* ContentView.swift */; };
+		236D337849CDBC4610B9E805 /* GlanceRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C5C4EBC09BA9BFC0A946C7 /* GlanceRenderer.swift */; };
 		248F297C529B0B56BA58868B /* tables.c in Sources */ = {isa = PBXBuildFile; fileRef = B73561314F90501277D6F481 /* tables.c */; };
 		275C3F87AFA739B90BA1F848 /* EvenaiModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E57E2CC7EFCED1900AD38A /* EvenaiModel.swift */; };
 		2DEFB2786588E3A7CFE3F862 /* NativeLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F4E52F97091402FF3A89933 /* NativeLocation.swift */; };
 		2F6807F6F51D137B182660D4 /* sns.c in Sources */ = {isa = PBXBuildFile; fileRef = B1CA71FD235577C83E7092A7 /* sns.c */; };
 		307F1F534B3B779A5D4684FA /* GlanceSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16E32B6DCAA910EB6074B7CC /* GlanceSource.swift */; };
-		FFCC000000000000000C0002 /* GlanceContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCC000000000000000C0001 /* GlanceContext.swift */; };
-		FFCC000000000000000C0004 /* TimeSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCC000000000000000C0003 /* TimeSource.swift */; };
 		318832D4EAE82CC7E245B013 /* attdet.c in Sources */ = {isa = PBXBuildFile; fileRef = 89C377C5FCF430D2BC8BF405 /* attdet.c */; };
 		32DC210B63697F3540C81EFC /* mdct.c in Sources */ = {isa = PBXBuildFile; fileRef = 1B90051AC682A84EA35E73FE /* mdct.c */; };
 		38BB35AA5F4EC845570652F3 /* GattProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242725BDCAC3BB8542773B93 /* GattProtocol.swift */; };
@@ -30,6 +29,7 @@
 		40D39E69967C289BA9BF32EC /* WeatherSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083F9CAC3CE27674F2A039ED /* WeatherSource.swift */; };
 		4104F14EC80127E590E04977 /* EvenAIProto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D0D2FE1E187AE694EF3902 /* EvenAIProto.swift */; };
 		422DC4839C418FCE57C178CE /* ClaudeSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 527494C28AFA08BD8D708DCD /* ClaudeSession.swift */; };
+		4A015737158178577085E0AA /* BmpEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90BDF15245612E2A06FC32EF /* BmpEncoder.swift */; };
 		528AF28FAE8928DD63DBBCAC /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F2FA8FC456628ED332176E5 /* Settings.swift */; };
 		55A88479424735D8C900840D /* FeaturesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D863FBE980098127214B06 /* FeaturesView.swift */; };
 		5F232324D9C9D622CB0E3C4A /* GlanceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65F51625479732C33F2AA6EC /* GlanceService.swift */; };
@@ -56,10 +56,12 @@
 		C8D8985F38C6DA2B0D52084F /* COGOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 290F37BACEFD772F577D71B3 /* COGOSApp.swift */; };
 		CBD8F382C37BB7084403C684 /* plc.c in Sources */ = {isa = PBXBuildFile; fileRef = 904F0F878EC8D88996DF684D /* plc.c */; };
 		CCFB667A58AE405E3D152F67 /* BmpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11A76E6955BC52E894F12E /* BmpView.swift */; };
+		CE38F9B158870C434ACEE6E1 /* TimeSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF643BBB5074FC0CF73DD02A /* TimeSource.swift */; };
 		D2115F1E81D86C34A38A2AFD /* SpeechStreamRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9AFB6766B48A69DC9C88BC1 /* SpeechStreamRecognizer.swift */; };
 		DDB1A32CE00905FD9971B45D /* ServiceIdentifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61E0FBD100FAB74083F00A3 /* ServiceIdentifiers.swift */; };
 		DF2A779A30C3AD31A06C537E /* HistoryListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25D20652D265A564AF6740AD /* HistoryListView.swift */; };
 		E155C0626541260951150353 /* BmpTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C50FD2C5B444E5B4D0E897F /* BmpTransfer.swift */; };
+		E9F73795DEA55FBA9740149B /* GlanceContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF213378779FAF1B5710D07 /* GlanceContext.swift */; };
 		F4288EFCCCDA2672BE07E4B2 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29DB840C9E65CE8B6C30956B /* HomeView.swift */; };
 		F54136E38EEE2AFEDB87867E /* tns.c in Sources */ = {isa = PBXBuildFile; fileRef = 2B1F9D2472C420E1CB64CB89 /* tns.c */; };
 		F81144EEB6EDB4BF2CCA42DC /* SSEParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1FC7B4A9C67DC441FD742DC /* SSEParser.swift */; };
@@ -73,8 +75,6 @@
 		0EE01BB747026B40560B8E29 /* bits.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bits.h; sourceTree = "<group>"; };
 		102321C2B19D72ED907A02DC /* lc3_cpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lc3_cpp.h; sourceTree = "<group>"; };
 		16E32B6DCAA910EB6074B7CC /* GlanceSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceSource.swift; sourceTree = "<group>"; };
-		FFCC000000000000000C0001 /* GlanceContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceContext.swift; sourceTree = "<group>"; };
-		FFCC000000000000000C0003 /* TimeSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeSource.swift; sourceTree = "<group>"; };
 		1B90051AC682A84EA35E73FE /* mdct.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mdct.c; sourceTree = "<group>"; };
 		1F2FA8FC456628ED332176E5 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		2050FB1FD7A27BF2158CE35D /* NotificationSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSource.swift; sourceTree = "<group>"; };
@@ -118,6 +118,7 @@
 		8AEB4DE5B28BF0FF973F8E8C /* NotifyModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotifyModel.swift; sourceTree = "<group>"; };
 		8EAA90A7B5FAC89F9D4548C7 /* CRC32XZ.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRC32XZ.swift; sourceTree = "<group>"; };
 		904F0F878EC8D88996DF684D /* plc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = plc.c; sourceTree = "<group>"; };
+		90BDF15245612E2A06FC32EF /* BmpEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BmpEncoder.swift; sourceTree = "<group>"; };
 		9C50FD2C5B444E5B4D0E897F /* BmpTransfer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BmpTransfer.swift; sourceTree = "<group>"; };
 		A040A315724B2A6145E81DE3 /* LocationSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSource.swift; sourceTree = "<group>"; };
 		A096EC2FC6E902A754ABD323 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -140,6 +141,7 @@
 		C8B5D4E02BFD7F54696EB42B /* BluetoothManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothManager.swift; sourceTree = "<group>"; };
 		CC11A76E6955BC52E894F12E /* BmpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BmpView.swift; sourceTree = "<group>"; };
 		D2C288D5B1E74BDDEB923DE0 /* TransitSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitSource.swift; sourceTree = "<group>"; };
+		D5C5C4EBC09BA9BFC0A946C7 /* GlanceRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceRenderer.swift; sourceTree = "<group>"; };
 		DA59E8FC25946CBE1D937AC3 /* bits.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bits.c; sourceTree = "<group>"; };
 		E151F914C9B454DFC19B44C8 /* ltpf_neon.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ltpf_neon.h; sourceTree = "<group>"; };
 		E67D1F8257988A8DCC91FCFE /* common.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = common.h; sourceTree = "<group>"; };
@@ -149,6 +151,8 @@
 		F507C3C6225053224E33E46B /* tns.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = tns.h; sourceTree = "<group>"; };
 		F7450CEFD27F1ABCD9227EA5 /* lc3.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lc3.c; sourceTree = "<group>"; };
 		FB02F9F65C399360CA2BF95C /* mdct.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mdct.h; sourceTree = "<group>"; };
+		FDF213378779FAF1B5710D07 /* GlanceContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceContext.swift; sourceTree = "<group>"; };
+		FF643BBB5074FC0CF73DD02A /* TimeSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeSource.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -247,7 +251,7 @@
 				A040A315724B2A6145E81DE3 /* LocationSource.swift */,
 				33FE4A560EBA557285057C21 /* NewsSource.swift */,
 				2050FB1FD7A27BF2158CE35D /* NotificationSource.swift */,
-				FFCC000000000000000C0003 /* TimeSource.swift */,
+				FF643BBB5074FC0CF73DD02A /* TimeSource.swift */,
 				D2C288D5B1E74BDDEB923DE0 /* TransitSource.swift */,
 				083F9CAC3CE27674F2A039ED /* WeatherSource.swift */,
 				2E02B6A57AE767C8ECC45B65 /* WTFTClient.swift */,
@@ -310,7 +314,9 @@
 		D2B9DCEEB5BA9A975B401F61 /* Glance */ = {
 			isa = PBXGroup;
 			children = (
-				FFCC000000000000000C0001 /* GlanceContext.swift */,
+				90BDF15245612E2A06FC32EF /* BmpEncoder.swift */,
+				FDF213378779FAF1B5710D07 /* GlanceContext.swift */,
+				D5C5C4EBC09BA9BFC0A946C7 /* GlanceRenderer.swift */,
 				65F51625479732C33F2AA6EC /* GlanceService.swift */,
 				16E32B6DCAA910EB6074B7CC /* GlanceSource.swift */,
 				68E1AEBF7ABD7F92B9C59F99 /* Sources */,
@@ -410,6 +416,7 @@
 				0A881FE2DD21BA7A8D9C808E /* BleProbeView.swift in Sources */,
 				9C9348268C0E08B208A27683 /* BleRequestQueue.swift in Sources */,
 				A8A24AD0973D3B1BB12528CD /* BluetoothManager.swift in Sources */,
+				4A015737158178577085E0AA /* BmpEncoder.swift in Sources */,
 				E155C0626541260951150353 /* BmpTransfer.swift in Sources */,
 				CCFB667A58AE405E3D152F67 /* BmpView.swift in Sources */,
 				C8D8985F38C6DA2B0D52084F /* COGOSApp.swift in Sources */,
@@ -423,10 +430,10 @@
 				55A88479424735D8C900840D /* FeaturesView.swift in Sources */,
 				38BB35AA5F4EC845570652F3 /* GattProtocol.swift in Sources */,
 				3DDB4B213A0A9CC39E2A4D52 /* GestureRouter.swift in Sources */,
+				E9F73795DEA55FBA9740149B /* GlanceContext.swift in Sources */,
+				236D337849CDBC4610B9E805 /* GlanceRenderer.swift in Sources */,
 				5F232324D9C9D622CB0E3C4A /* GlanceService.swift in Sources */,
-				FFCC000000000000000C0002 /* GlanceContext.swift in Sources */,
 				307F1F534B3B779A5D4684FA /* GlanceSource.swift in Sources */,
-				FFCC000000000000000C0004 /* TimeSource.swift in Sources */,
 				DF2A779A30C3AD31A06C537E /* HistoryListView.swift in Sources */,
 				C1C219EBEDA84436563C6594 /* HistoryStore.swift in Sources */,
 				F4288EFCCCDA2672BE07E4B2 /* HomeView.swift in Sources */,
@@ -447,6 +454,7 @@
 				D2115F1E81D86C34A38A2AFD /* SpeechStreamRecognizer.swift in Sources */,
 				8C70826DC65118021C1F4465 /* TextEntryView.swift in Sources */,
 				8F8BD9D0A2B6E353AE6F7AA3 /* TextPaginator.swift in Sources */,
+				CE38F9B158870C434ACEE6E1 /* TimeSource.swift in Sources */,
 				86C0FCC167E172A3B7BAE7B8 /* TransitSource.swift in Sources */,
 				7F25D470BC1D6DA2A5D5A6C2 /* WTFTClient.swift in Sources */,
 				40D39E69967C289BA9BF32EC /* WeatherSource.swift in Sources */,
