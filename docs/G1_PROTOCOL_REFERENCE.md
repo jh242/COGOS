@@ -265,6 +265,14 @@ after start time. Empty-events case: one dummy event
 `secondary_pane` is always written, even in FULL/MINIMAL modes — pass
 `EMPTY` when you don't care (Gadgetbridge pattern).
 
+#### `0x06 0x04 STOCKS` and `0x06 0x05 NEWS` — layouts unknown
+
+Declared in `G1Constants.java:208-209` and never serialized. Same public-source
+gap as the `0x1E` Quick Notes family — the firmware has the panes (addressable
+via `DashboardPaneMode.STOCKS = 0x01` and `DashboardPaneMode.NEWS = 0x02`) but
+no app implements the payload. Pinning needs a BLE sniff against the official
+Even Realities app.
+
 ### DashboardQuickNoteSubcommand (second byte after `0x1E`)
 
 | Byte | Name |

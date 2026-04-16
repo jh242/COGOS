@@ -76,7 +76,13 @@ end-to-end. Results:
    Realities app against a BLE sniffer while it adds/edits/deletes a
    quick note.
 5. **`0x1E 0x08 NOTE_ADD`** — same gap as (4).
-6. **`0x58 DASHBOARD_CALENDAR_NEXT_UP_SET`** — declared in
+6. **`0x06 0x04 STOCKS` and `0x06 0x05 NEWS`** — same gap. The news and
+   stocks panes exist in firmware (addressable via `DashboardPaneMode`)
+   but the payload format is undocumented. News was considered as a
+   contextual-text alternative to Quick Notes; it's blocked on the same
+   sniff. Good news: one capture session covers both `0x1E` and
+   `0x06 0x04/0x05`.
+7. **`0x58 DASHBOARD_CALENDAR_NEXT_UP_SET`** — declared in
    `G1Constants.java:140`, never used anywhere. Same live-sniff story.
 
 ### Material consequence
@@ -97,10 +103,30 @@ ship Q3 ("slot 0 only, overwrite"). Options:
   passive glance data. Retires the bitmap pipeline entirely with no
   Quick Notes dependency.
 
-**Recommendation:** start with A (sniff) — a 30-minute capture session
-with the Even app is cheap. Fall back to B if the sniff is messier than
-expected. C is a bigger product pivot and should not be forced by a
-protocol blocker.
+**Recommendation:** start with A (sniff) — a single 30-minute capture
+session covers Quick Notes, News, Stocks, **and** `0x58` next-up. One
+sniff unblocks four commands, not just one. Fall back to B if the sniff
+is messier than expected. C is a bigger product pivot and should not
+be forced by a protocol blocker.
+
+### Sniff-session protocol (when we run it)
+
+1. Pair G1 with the official Even Realities app on a fresh install.
+2. Start BLE capture (macOS: Bluetooth Developer Menu → PacketLogger;
+   Linux: `btmon`; Android: HCI snoop log).
+3. For each surface, perform the minimal edits and label the capture
+   timestamps:
+   - **Quick Notes:** add note → edit title → edit body → toggle
+     checkmark → delete. Record the note-id assigned each time.
+   - **News:** enable pane → let it populate → refresh.
+   - **Stocks:** enable pane → set a ticker → observe quote push.
+   - **Calendar next-up:** enable pane → wait for one event
+     transition (or fake by editing system time).
+4. For each captured packet with first byte `0x06` or `0x1E`: diff
+   against the pinned `0x06 0x01/0x03/0x06` layouts to infer field
+   meanings. Expect similar 9-byte chunk headers for chunked payloads.
+5. Append pinned layouts to `docs/G1_PROTOCOL_REFERENCE.md`, then ship
+   helpers in `DashboardProto.swift` / a new `QuickNoteProto.swift`.
 
 ## Product decisions (resolved)
 
