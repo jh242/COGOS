@@ -73,26 +73,29 @@ final class GlanceService: ObservableObject {
 
         // 1. Fixed tier — always included.
         for s in sources where s.enabled && s.tier == .fixed {
-            if let line = await fetchCached(s, now: now) { snippets.append(line) }
+            if let line = await fetchCached(s, now: now, context: ctx) { snippets.append(line) }
         }
 
-        // 2. Contextual tier — pick the single best relevant source.
+        // 2. Contextual tier — try sources in order of relevance.
+        var pickedContextual = false
         var scored: [(Int, GlanceSource)] = []
         for s in sources where s.enabled && s.tier == .contextual {
             if let p = await s.relevance(ctx) { scored.append((p, s)) }
         }
         scored.sort { $0.0 < $1.0 }
-        var pickedContextual = false
-        if let winner = scored.first?.1,
-           let line = await fetchCached(winner, now: now) {
-            snippets.append(line)
-            pickedContextual = true
+
+        for (_, source) in scored {
+            if let line = await fetchCached(source, now: now, context: ctx) {
+                snippets.append(line)
+                pickedContextual = true
+                break
+            }
         }
 
         // 3. Fallback tier — only if no contextual source fired.
         if !pickedContextual {
             for s in sources where s.enabled && s.tier == .fallback {
-                if let line = await fetchCached(s, now: now) {
+                if let line = await fetchCached(s, now: now, context: ctx) {
                     snippets.append(line); break
                 }
             }
@@ -102,12 +105,12 @@ final class GlanceService: ObservableObject {
     }
 
     /// Fetch a source, honoring its cacheDuration.
-    private func fetchCached(_ s: GlanceSource, now: Date) async -> String? {
+    private func fetchCached(_ s: GlanceSource, now: Date, context: GlanceContext) async -> String? {
         if let (data, at) = sourceCache[s.name],
            s.cacheDuration > 0, now.timeIntervalSince(at) < s.cacheDuration {
             return data
         }
-        guard let data = await s.fetch(), !data.isEmpty else { return nil }
+        guard let data = await s.fetch(context: context), !data.isEmpty else { return nil }
         sourceCache[s.name] = (data, now)
         return data
     }

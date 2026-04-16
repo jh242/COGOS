@@ -24,10 +24,8 @@ struct TransitSource: GlanceSource {
         return dist <= maxStationDistance ? 1 : nil
     }
 
-    func fetch() async -> String? {
-        var loc = location.lastKnownLocation()
-        if loc == nil { loc = await location.requestLocation() }
-        guard let userLoc = loc else { return nil }
+    func fetch(context: GlanceContext) async -> String? {
+        guard let userLoc = context.userLocation else { return nil }
 
         let stations: [WTFTClient.Station]
         do {
@@ -48,7 +46,7 @@ struct TransitSource: GlanceSource {
 
         let distStr = "\(Int(distMeters.rounded())) m"
 
-        let now = Date()
+        let now = context.now
         // Tag each arrival with its direction: N = uptown (↑), S = downtown (↓).
         var combined: [(dir: String, arr: WTFTClient.Arrival)] = station.N.map { ("↑", $0) }
         combined.append(contentsOf: station.S.map { ("↓", $0) })

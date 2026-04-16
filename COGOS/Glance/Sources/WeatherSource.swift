@@ -8,9 +8,8 @@ struct WeatherSource: GlanceSource {
 
     let location: NativeLocation
 
-    func fetch() async -> String? {
-        var loc = location.lastKnownLocation()
-        if loc == nil { loc = await location.requestLocation() }
+    func fetch(context: GlanceContext) async -> String? {
+        var loc = context.userLocation ?? await location.requestLocation()
         guard let loc = loc else { return nil }
 
         let lat = loc.coordinate.latitude

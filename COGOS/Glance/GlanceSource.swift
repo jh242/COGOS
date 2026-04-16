@@ -19,7 +19,7 @@ protocol GlanceSource {
     /// Lower number = higher priority. `nil` means "not relevant now, skip".
     /// `fixed` and `fallback` sources can ignore this.
     func relevance(_ ctx: GlanceContext) async -> Int?
-    func fetch() async -> String?
+    func fetch(context: GlanceContext) async -> String?
 }
 
 extension GlanceSource {

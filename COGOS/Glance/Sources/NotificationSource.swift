@@ -17,7 +17,7 @@ struct NotificationSource: GlanceSource {
         return ctx.now.timeIntervalSince(newest) <= Self.recentWindow ? 2 : nil
     }
 
-    func fetch() async -> String? {
+    func fetch(context: GlanceContext) async -> String? {
         let delivered = await Self.getDelivered()
         let sorted = delivered.sorted { $0.date > $1.date }.prefix(3)
         if sorted.isEmpty { return nil }

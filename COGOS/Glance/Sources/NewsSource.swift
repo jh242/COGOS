@@ -10,7 +10,7 @@ struct NewsSource: GlanceSource {
     /// Other usable values: WORLD, NATION, TECHNOLOGY, SCIENCE, SPORTS, HEALTH, ENTERTAINMENT.
     var topic: String = "BUSINESS"
 
-    func fetch() async -> String? {
+    func fetch(context: GlanceContext) async -> String? {
         let urlStr = "https://news.google.com/rss/headlines/section/topic/\(topic)?hl=en-US&gl=US&ceid=US:en"
         guard let url = URL(string: urlStr) else { return nil }
 

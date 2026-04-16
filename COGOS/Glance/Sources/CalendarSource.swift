@@ -14,7 +14,7 @@ struct CalendarSource: GlanceSource {
         return next.timeIntervalSince(ctx.now) <= imminentEventWindow ? 0 : nil
     }
 
-    func fetch() async -> String? {
+    func fetch(context: GlanceContext) async -> String? {
         guard let events = await Self.upcomingEvents(limit: 3), !events.isEmpty else { return nil }
         let formatter = DateFormatter()
         formatter.dateFormat = "H:mm"
