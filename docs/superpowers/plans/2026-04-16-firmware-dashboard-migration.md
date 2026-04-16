@@ -111,22 +111,18 @@ be forced by a protocol blocker.
 
 ### Sniff-session protocol (when we run it)
 
+See **`docs/ble-sniff-analysis.md`** for the full Claude instruction doc
+(what to read, how to decode, what to produce). Short version:
+
 1. Pair G1 with the official Even Realities app on a fresh install.
-2. Start BLE capture (macOS: Bluetooth Developer Menu → PacketLogger;
-   Linux: `btmon`; Android: HCI snoop log).
-3. For each surface, perform the minimal edits and label the capture
-   timestamps:
-   - **Quick Notes:** add note → edit title → edit body → toggle
-     checkmark → delete. Record the note-id assigned each time.
-   - **News:** enable pane → let it populate → refresh.
-   - **Stocks:** enable pane → set a ticker → observe quote push.
-   - **Calendar next-up:** enable pane → wait for one event
-     transition (or fake by editing system time).
-4. For each captured packet with first byte `0x06` or `0x1E`: diff
-   against the pinned `0x06 0x01/0x03/0x06` layouts to infer field
-   meanings. Expect similar 9-byte chunk headers for chunked payloads.
-5. Append pinned layouts to `docs/G1_PROTOCOL_REFERENCE.md`, then ship
-   helpers in `DashboardProto.swift` / a new `QuickNoteProto.swift`.
+2. Start BLE capture — macOS PacketLogger (Bluetooth Developer Menu),
+   filter ATT handles `0x0403` / `0x0405`, hit Clear right before the
+   test sequence, save when done.
+3. Keep a timestamped log of every action in the Even app (add note,
+   edit, delete, enable stocks, etc.) so packets can be matched to intent.
+4. Hand the `.pklg` + timestamp log to Claude with the instruction doc —
+   it will decode, update `docs/G1_PROTOCOL_REFERENCE.md`, and ship the
+   Swift helpers in one pass.
 
 ## Product decisions (resolved)
 
