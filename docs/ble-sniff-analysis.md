@@ -22,34 +22,61 @@ interpret a single byte.
 
 ## Step 1 — Extract G1 packets from the log
 
-In PacketLogger, the capture should already be filtered to:
+**ATT handles (from live capture, 2026-04-17):**
 
-- ATT handle `0x0403` (left arm write)
-- ATT handle `0x0405` (right arm write)
+- Write (phone → glasses): **`0x0015`** on both arms
+- Notify (glasses → phone): **`0x0012`** on both arms
+- Arm is distinguished by the **HCI connection handle**, not the ATT handle:
+  - `0x0401` = left arm
+  - `0x0404` = right arm
+  (These vary per pairing session — confirm from the log's connect events.)
 
-Each row in the filtered view is one `ATT Write Command` from phone → glasses.
-Export or copy the visible rows. The relevant columns are **Timestamp** and
-**Value** (the raw hex payload).
+The `0x0403 / 0x0405` ATT handles referenced in older Gadgetbridge / MentraOS
+sources are **not** what the G1 actually exposes; ignore them.
 
-If the log is unfiltered, apply in PacketLogger's filter bar:
+**PacketLogger workflow:**
+
+1. `File → Export As → Text File`.
+2. In the export dialog, enable **"Include Packet Bytes"** (raw mode). The
+   default "summary" export truncates every Value column at 16 hex bytes with
+   `…`, which is useless for multi-packet decoding. The raw export appends
+   the full HCI payload after the Value column — that's what we parse.
+3. Name the output `<scenario>_Raw.txt`.
+
+**What each raw line looks like:**
+
 ```
-att.handle == 0x0403 || att.handle == 0x0405
+Apr 17 08:08:53.682  ATT Send  0x0401  ...  Handle:0x0015 - Value: 1E23 ...  \
+  01 04 2A 00 26 00 04 00 52 15 00 1E 23 00 90 03 01 00 01 00 01 01 05 54 …
 ```
-Then `File → Save` to export only the filtered packets.
+
+The raw HCI trailer after the Value column is the full bytes. To extract the
+G1 packet, strip everything up to and including the ATT opcode / handle
+prefix (`52 15 00` = Write Command to handle 0x0015). Everything after is the
+G1 payload.
+
+**Wireshark alternative:** If you re-export the `.pklg` as `.pcap` and open
+in Wireshark, the downlink filter is:
+```
+btatt.handle == 0x0015 && btatt.opcode == 0x52
+```
 
 ---
 
 ## Step 2 — Group by command family
 
-The first byte of the Value column is the top-level command byte. Bucket
-every row by that byte:
+The first byte of the G1 payload is the top-level command byte. Bucket every
+row by that byte:
 
 | First byte | Family | Status |
 |------------|--------|--------|
 | `0x06` | Dashboard panes | Partially pinned — see below |
-| `0x1E` | Quick Notes | **Unknown** — target |
-| `0x58` | Dashboard next-up | **Unknown** — target |
-| `0x25` | Heartbeat | Known, ignore |
+| `0x1E` | Quick Notes | **Pinned (2026-04-17)** — layout below |
+| `0x22` | Status-get family | Sub `0x05` observed on right arm after every dashboard ping — layout below |
+| `0x58` | Dashboard next-up | **Unknown** — not yet observed firing in any capture |
+| `0x2C` | Battery + firmware GET | Known get, ignore |
+| `0x2B` | Silent-mode GET | Known get, ignore |
+| `0x29` | Brightness GET | Known get, ignore |
 | `0x0E` | Mic control | Known, ignore |
 | `0x4E` | Even AI text | Known, ignore |
 | anything else | Unknown | Note but don't block on it |
@@ -58,11 +85,16 @@ Within `0x06`, the second byte is the sub-command:
 
 | `0x06` sub | Surface | Status |
 |------------|---------|--------|
-| `0x01` | Time + weather | **Pinned** — layout in reference doc |
-| `0x03` | Calendar | **Pinned** — layout in reference doc |
+| `0x01` | Time + weather | **Pinned** — note: reference doc says 21 bytes but live is **22 bytes** (one extra trailing `00`) |
+| `0x03` | Calendar | **Pinned** — note: reference doc's `01 03 03` magic prefix is wrong; Even app's empty-calendar body is `00 00 02` |
 | `0x04` | Stocks | **Unknown** — target |
 | `0x05` | News | **Unknown** — target |
-| `0x06` | Dashboard mode | **Pinned** — layout in reference doc |
+| `0x06` | Dashboard mode | **Pinned** — matches reference doc exactly |
+
+**The Even app does a full dashboard re-push every ~5s**, sending (in order):
+`06 06 MODE` → `06 01 TIME_WEATHER` → `06 03 CALENDAR` → `22 05 STATUS` (right arm only).
+Same bytes go to both L and R, back-to-back. That's the steady-state traffic
+you'll see between user actions.
 
 ---
 
@@ -74,25 +106,27 @@ timestamp" from "this byte is a string length".
 
 For each unknown packet family, the minimum test sequence to decode it:
 
-### `0x1E` Quick Notes
+### `0x1E` Quick Notes — pinned 2026-04-17
 
-| Action | What it tells you |
-|--------|------------------|
-| Add note with title "A", body "B" | Baseline encoding: find title and body bytes, find length prefix or delimiters, find note-id field |
-| Add second note, title "CD", body "EFG" | Confirm length encoding pattern, find id=1 vs id=0 |
-| Edit note 0: change body to "HIJKLMN" | Find which bytes changed → isolates body field |
-| Delete note 0 | Find delete sub-command and its arguments |
-| Clear all notes | Find clear-all vs delete-by-id distinction |
+Wire layout (non-empty body, empty-slot template, chunked header, worked
+examples) lives in [`docs/G1_PROTOCOL_REFERENCE.md`](G1_PROTOCOL_REFERENCE.md)
+under the `0x1E 0x03 NOTE_TEXT_EDIT` section. Don't duplicate it here.
 
-For each packet: write out the bytes with field annotations once you've
-decoded them, e.g.:
-```
-1E 03 00 41 42 43 ...
-│  │  │  └─ title bytes ("ABC")
-│  │  └─ note_id
-│  └─ sub-command (03 = add? edit?)
-└─ command byte
-```
+**Protocol-level findings from that session** (not byte-level — kept here
+because these shape how Swift code consumes the protocol):
+
+1. **Only sub-command `0x03` is ever emitted by the Even app**. The
+   `0x08 NOTE_ADD` / `0x07 NOTE_STATUS_EDIT` / `0x0A` constants declared in
+   Gadgetbridge are unused in practice — `0x03` handles add, edit, and clear.
+2. **Replace-all-4-slots protocol.** Every user action writes exactly 4
+   packets back-to-back, one per slot (1..4), whether or not each slot
+   changed. There's no incremental per-slot update. Swift implementation
+   should expose one "set all slots" entry point, not "add/delete/edit".
+3. Each packet is sent to L then R with the same seq byte.
+
+These three points stay in future sniff analyses because they're not
+obvious from reading the reference doc alone — they're architectural
+observations about how the Even app chose to use the primitives.
 
 ### `0x06 0x04` Stocks and `0x06 0x05` News
 
@@ -110,10 +144,32 @@ Same for News — enable pane with one topic, swap topic, disable.
 
 ### `0x58` Next-up
 
-This likely fires when a calendar event transitions to "next up". If the test
-log shows it firing, note exact byte layout. Cross-reference with the
-`CalendarEvent` struct already in `DashboardTypes.swift` — the fields may
-overlap.
+Not yet observed in any capture. Theory: fires when a calendar event
+transitions to "next up" within the dashboard's visible window. To trigger,
+schedule a calendar event starting in ~5 minutes and capture across the
+boundary.
+
+If/when captured, cross-reference with the `CalendarEvent` struct in
+`DashboardTypes.swift` — the fields may overlap.
+
+### `0x22 0x05` — status/handshake (new, right arm only)
+
+Observed after every dashboard-ping cycle, sent only on the right HCI handle:
+
+```
+22 05 00 <seq> 01         (5 bytes, matches length byte [1])
+```
+
+Response from glasses:
+```
+22 05 00 <seq> 01 0A 01 01
+```
+
+Not documented in the reference doc. Not present on the left arm. Appears to
+be a lightweight "still alive / apply dashboard" acknowledgement. Worth
+adding to `G1_PROTOCOL_REFERENCE.md` with an explicit note that this is
+right-arm-only and what the response trailing bytes (`0A 01 01`) mean — still
+unknown.
 
 ---
 
@@ -177,12 +233,18 @@ Once layouts are pinned, add packet assemblers following the same pattern as
 
 **For Quick Notes** — new file `COGOS/Protocol/QuickNoteProto.swift`:
 ```swift
+struct QuickNote { let title: String; let body: String }
+
 enum QuickNoteProto {
-    static func addNotePacket(id: UInt8, title: String, body: String, seq: UInt8) -> Data
-    static func deleteNotePacket(id: UInt8, seq: UInt8) -> Data
-    static func clearNotesPacket(seq: UInt8) -> Data
+    // Always emits exactly 4 packets (one per slot 1..4). Pass `nil` for
+    // empty slots. Caller feeds `seq` as a contiguous 4-byte range.
+    static func setSlotsPackets(_ slots: [QuickNote?], startingSeq: UInt8) -> [Data]
 }
 ```
+Single entry point because the firmware protocol is "replace all 4 slots" —
+there's no per-slot add/delete. The implementation emits a non-empty body
+(see pinned layout above) for `QuickNote` values and the fixed 7-byte empty
+template for `nil` slots.
 
 **For Stocks / News** — extend `DashboardProto.swift` with:
 ```swift

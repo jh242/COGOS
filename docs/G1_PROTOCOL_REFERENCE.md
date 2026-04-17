@@ -19,18 +19,25 @@ Realities EvenDemoApp.
 | BLE service (Nordic UART) | `6e400001-b5a3-f393-e0a9-e50e24dcca9e` |
 | TX characteristic (write) | `6e400002-b5a3-f393-e0a9-e50e24dcca9e` |
 | RX characteristic (notify) | `6e400003-b5a3-f393-e0a9-e50e24dcca9e` |
-| ATT write handle — left arm  | `0x0403` |
-| ATT write handle — right arm | `0x0405` |
+| ATT handle — write (phone → glasses) | `0x0015` (both arms) |
+| ATT handle — notify (glasses → phone) | `0x0012` (both arms) |
 | MTU | 251 |
 | Max payload size | 180 bytes (observed firmware limit) |
 | Heartbeat interval | 8 s (glasses disconnect at ~32 s idle) |
 | Device name format | `G1_XX_[L\|R]_YYYYY` |
 
+**Arm identification:** both arms expose the same ATT handles. The left vs
+right distinction is made at the HCI layer — each arm gets its own HCI
+connection handle (observed: `0x0401` = L, `0x0404` = R, though these vary
+per pairing session). Older third-party drivers (Gadgetbridge, MentraOS)
+reference ATT handles `0x0403 / 0x0405` — those are stale / wrong.
+
 **Wireshark filter for G1 downlink (phone → glasses) only:**
 ```
-btatt.handle == 0x0403 || btatt.handle == 0x0405
+btatt.handle == 0x0015 && btatt.opcode == 0x52
 ```
-Add `&& btatt.opcode == 0x52` to narrow to Write Commands only.
+(`0x52` = ATT Write Command opcode.) Distinguish arms by the preceding HCI
+connection handle, not by ATT handle.
 
 ---
 
@@ -76,7 +83,7 @@ Everything else in the [Command ID](#command-id-app--glasses) table is a top-lev
 | `0x22` | `STATUS_GET` | |
 | `0x23` | `SYSTEM_CONTROL` | Has sub-commands |
 | `0x24` | `TELEPROMPTER_SUSPEND` | |
-| `0x25` | `TELEPROMPTER_POSITION_SET` | |
+| `0x25` | `TELEPROMPTER_POSITION_SET` / `HEARTBEAT` | Gadgetbridge names this `TELEPROMPTER_POSITION_SET`; EvenDemoApp (and our COGOS `Proto.sendHeartBeat`) uses the same byte as a heartbeat with payload `[length_lo, length_hi, seq, 0x04, seq]`. The Even Realities iOS app does **not** send `0x25` at all — it keeps the link alive via the ~5 s full dashboard re-push (`0x06 0x06` → `0x06 0x01` → `0x06 0x03` → `0x22 0x05`). Firmware appears to accept both strategies. |
 | `0x26` | `HARDWARE_SET` | Has sub-commands |
 | `0x27` | `WEAR_DETECTION_SET` | |
 | `0x29` | `BRIGHTNESS_GET` | |
@@ -205,11 +212,11 @@ The upper 4 bits encode display status; lower 4 bits encode the action.
 Byte layouts pinned from Gadgetbridge
 (`G1Communications.java`, `G1Constants.java`):
 
-#### `0x06 0x01 TIME_AND_WEATHER` — fixed 21-byte packet
+#### `0x06 0x01 TIME_AND_WEATHER` — fixed 22-byte packet
 
 ```
 [0]    0x06                   DASHBOARD_SET
-[1]    0x15                   total packet length (21), not a payload-length
+[1]    0x16                   total packet length (22), not a payload-length
 [2]    0x00                   pad / reserved
 [3]    seq : u8               command sequence id
 [4]    0x01                   TIME_AND_WEATHER
@@ -219,7 +226,13 @@ Byte layouts pinned from Gadgetbridge
 [18]   temp_celsius : i8      signed; Kelvin − 273
 [19]   unit : u8              0x00 = °C, 0x01 = °F (display only)
 [20]   hour_fmt : u8          0x00 = 12h, 0x01 = 24h
+[21]   0x00                   trailing byte; purpose unknown, always 0x00 in captures
 ```
+
+**Length correction:** Gadgetbridge's source documents this as 21 bytes
+(`0x15`), but the live Even-app capture shows 22 bytes (`0x16`) with a
+trailing `0x00` at byte `[21]`. Firmware appears to accept both; write 22 to
+match the official app's behavior.
 
 Quirk: firmware re-maps `SUNNY (0x10)` → `NIGHT (0x01)` based on sunrise/sunset
 vs. the supplied timestamp (Gadgetbridge mirrors this; we should match).
@@ -244,18 +257,32 @@ Per-chunk wire header (9 bytes):
 Body (before chunking):
 
 ```
-0x01 0x03 0x03            3 magic prefix bytes (purpose unknown per Gadgetbridge)
-event_count : u8          min(events.count, 8); if 0, written as 1 + dummy event
+<magic prefix: 3 bytes>   value varies; see below
+event_count : u8          min(events.count, 8)
 per event (TLV):
   0x01 len:u8 title_utf8
   0x02 len:u8 time_str_utf8     pre-formatted by app ("HH:mm" / "h:mma" / …)
   0x03 len:u8 location_utf8
 ```
 
+**Magic prefix correction (2026-04-17 Even-app capture):** Gadgetbridge's
+source shows `01 03 03` as a fixed prefix, but the live Even app sends
+`00 00 02` for the empty-calendar case. Concretely, the full empty-calendar
+packet observed is:
+
+```
+06 0C 00 <seq> 03 01 00 01 00 00 00 02
+└header────┘   └sub + chunk(1/1)┘ └body: 00 00 02┘
+```
+
+We don't yet have a non-empty calendar capture from the Even app, so the
+prefix for populated calendars is still unconfirmed — it may differ again
+from Gadgetbridge's `01 03 03`. Capture a non-empty calendar before
+committing the prefix bytes in Swift.
+
 Chunking: max body per chunk = `180 − 9 = 171` bytes. Firmware renders
 `time_str` verbatim — it does not parse timestamps. Events auto-clear 5 min
-after start time. Empty-events case: one dummy event
-`0x01 <len> "No events" 0x02 0x00 0x03 0x00`.
+after start time.
 
 #### `0x06 0x06 MODE` — fixed 7-byte packet
 
@@ -283,29 +310,94 @@ Even Realities app.
 
 ### DashboardQuickNoteSubcommand (second byte after `0x1E`)
 
-| Byte | Name |
-|------|------|
-| `0x01` | `AUDIO_METADATA_GET` |
-| `0x02` | `AUDIO_FILE_GET` |
-| `0x03` | `NOTE_TEXT_EDIT` |
-| `0x04` | `AUDIO_FILE_DELETE` |
-| `0x05` | `AUDIO_RECORD_DELETE` |
-| `0x07` | `NOTE_STATUS_EDIT` |
-| `0x08` | `NOTE_ADD` |
-| `0x09` | *Unknown* |
-| `0x0A` | `NOTE_STATUS_EDIT_2` |
+| Byte | Name | Status |
+|------|------|--------|
+| `0x01` | `AUDIO_METADATA_GET` | Constant declared; wire layout not captured |
+| `0x02` | `AUDIO_FILE_GET` | Constant declared; wire layout not captured |
+| `0x03` | `NOTE_TEXT_EDIT` | **Pinned 2026-04-17** — see below |
+| `0x04` | `AUDIO_FILE_DELETE` | Constant declared; wire layout not captured |
+| `0x05` | `AUDIO_RECORD_DELETE` | Constant declared; wire layout not captured |
+| `0x07` | `NOTE_STATUS_EDIT` | Constant declared; never observed from Even app |
+| `0x08` | `NOTE_ADD` | Constant declared; **never observed** — Even app uses `0x03` for add too |
+| `0x09` | *Unknown* | — |
+| `0x0A` | `NOTE_STATUS_EDIT_2` | Constant declared; never observed from Even app |
 
-**⚠ Payload layouts for `0x1E` sub-commands are NOT documented in any public
-source.** Gadgetbridge, MentraOS, and the official `EvenDemoApp` all declare
-the sub-command constants but none implement a serializer. Gadgetbridge's
-own comment at `G1Constants.java:220` is speculative ("Does this delete the
-metadata?"). To pin these down we need to sniff traffic from the official
-Even Realities app while it adds / edits / deletes a quick note. Until
-then, treat Quick Notes as unimplementable.
+**Key finding from the 2026-04-17 Even-app capture:** the Even app uses
+`0x1E 0x03` (NOTE_TEXT_EDIT) as the single unified write for add, edit, and
+clear operations on text notes. Sub-commands `0x07`, `0x08`, `0x0A` never
+fire in practice — they're constants the firmware accepts but that the
+official app doesn't emit. Our Swift implementation should mirror that:
+only emit `0x03`, and treat "add" and "clear" as the same sub-command with
+different body contents.
 
-That the spec/firmware-features docs reference a concrete payload shape
-for `0x1E 0x03` (add/update/delete sub-sub-commands, note-id) was based on
-inference from the constant names, not on traced bytes.
+#### `0x1E 0x03 NOTE_TEXT_EDIT` — replace-all-4-slots, chunked-TLV body
+
+**Protocol semantics:** every note update writes **4 packets** back-to-back,
+one per slot (`1..4`), whether or not each slot has changed. There is no
+incremental per-slot update and no "delete slot N" command. Slots without
+a note are written with the fixed "empty" body below.
+
+**Wire header (9 bytes, identical structure to `0x06 0x03 CALENDAR`):**
+
+```
+[0] 0x1E                      cmd
+[1] total_length : u8         includes header + body
+[2] 0x00                      pad
+[3] seq : u8                  global monotonic sequence
+[4] 0x03                      sub = NOTE_TEXT_EDIT
+[5] chunk_count : u8          observed: always 0x01
+[6] 0x00                      pad
+[7] chunk_index : u8          1-based; observed: always 0x01
+[8] 0x00                      pad
+```
+
+**Non-empty slot body:**
+
+```
+[9]       slot_id : u8              1..4
+[10]      title_tag : u8 = 0x01
+[11]      title_len : u8            utf-8 byte count
+[12..]    title_utf8
+[12+tl]   body_len : u16 LE
+[14+tl..] body_utf8
+```
+
+Title is TLV-style (`tag 0x01 + u8 length`); body is length-prefixed with
+a `u16 LE` length and **no tag byte**. `title_len` fits in one byte; the
+observed max title width on screen is short but the wire encoding allows up
+to 255 bytes. Body supports up to 65535 bytes in theory — actual firmware
+limit not yet probed.
+
+**Empty slot body (fixed 7-byte template):**
+
+```
+[9]       slot_id : u8              1..4
+[10..15]  00 01 00 01 00 00         literal — always these 6 bytes
+```
+
+Full empty-slot packet (16 bytes total):
+```
+1E 10 00 <seq> 03  01 00 01 00  <slot>  00 01 00 01 00 00
+```
+
+Treat the 6-byte tail as a literal — don't try to reinterpret it as TLVs.
+
+**Worked examples (from live capture):**
+
+Slot 1, title "Title", body "This is the body":
+```
+1E 23 00 90 03  01 00 01 00   01 01 05 54 69 74 6C 65   10 00  54 68 69 73 20 69 73 20 74 68 65 20 62 6F 64 79
+```
+
+Slot 1, title "Test note", body "Hi, this is the body of the test \nnote" (38 bytes):
+```
+1E 3D 00 B0 03  01 00 01 00   01 01 09 "Test note"   26 00 "Hi, this is the body of the test \nnote"
+```
+
+Clear slot 2:
+```
+1E 10 00 92 03  01 00 01 00   02  00 01 00 01 00 00
+```
 
 Max calendar events: 8 (4 pages × 2 events).
 
@@ -313,8 +405,31 @@ Max calendar events: 8 (4 pages × 2 events).
 
 Declared in `G1Constants.java:140` and never used in Gadgetbridge,
 MentraOS, or the EvenDemoApp. Name suggests a dedicated "next up" pane
-distinct from the 8-event list in `0x06 0x03`. Also needs live sniffing
-before we can touch it.
+distinct from the 8-event list in `0x06 0x03`. Not observed in any
+capture so far. To trigger: schedule a calendar event starting in ~5
+minutes and capture across the transition boundary — that should cause
+the Even app to emit a `0x58` write.
+
+### `0x22 0x05` — right-arm status/handshake
+
+Observed on every dashboard-ping cycle, sent to the **right arm only**,
+immediately after the three `0x06 ...` dashboard packets:
+
+```
+Write:    22 05 00 <seq> 01                       (5 bytes)
+Notify:   22 05 00 <seq> 01 0A 01 01              (9 bytes)
+```
+
+- Byte `[1] = 0x05` is the total length (matches the write).
+- Byte `[4] = 0x01` is likely a sub-command or "apply" flag.
+- Response trailing bytes `0A 01 01` are unexplained — may be
+  status/ack/battery. Needs further probing (vary battery level, silent
+  mode, etc., and diff the response).
+
+`0x22` is already pinned as `STATUS_GET` for the single-byte form (`22`
+alone, no sub). The `22 05 ...` form is a different beast — it's a
+parameterized write, not a status read. Whether these share the same
+command-ID semantics is unclear; treat them as distinct surfaces.
 
 ---
 

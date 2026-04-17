@@ -37,3 +37,10 @@ Pods/
 .env
 .env/
 .claude/
+
+# BLE sniff captures (raw HCI traces, session-specific)
+*.pklg
+*_Raw.txt
+*_PacketLog*.txt
+*_QuickNotes_Text.txt
+Extracted Data/

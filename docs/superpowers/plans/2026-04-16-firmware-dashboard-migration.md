@@ -57,72 +57,64 @@ end-to-end. Results:
 
 ### Pinned (done)
 
-1. **`0x06 0x01 TIME_AND_WEATHER`** — fixed 21-byte packet. Layout in
-   `docs/G1_PROTOCOL_REFERENCE.md`. u32 LE unix_seconds + u64 LE unix_millis
-   + weather byte + temp (i8 Celsius) + unit + 12/24h flag.
+1. **`0x06 0x01 TIME_AND_WEATHER`** — fixed 22-byte packet (was listed as
+   21 pre-sniff; the Even app emits 22 with a trailing `0x00` at byte [21]).
+   Layout in `docs/G1_PROTOCOL_REFERENCE.md`.
 2. **`0x06 0x03 CALENDAR`** — chunked TLV. 9-byte per-chunk header,
    `0x01/0x02/0x03` TLV per event (title/time_str/location). Time is
    **pre-formatted string**, not a timestamp. Max 171 body bytes per
-   chunk. Layout in `docs/G1_PROTOCOL_REFERENCE.md`.
+   chunk. Empty-calendar body is `00 00 02` (not Gadgetbridge's speculative
+   `01 03 03`; non-empty prefix still needs a populated-calendar sniff).
+   Layout in `docs/G1_PROTOCOL_REFERENCE.md`.
 3. **`0x06 0x06 MODE`** — fixed 7-byte packet. Mode byte + secondary pane
    byte. Layout in `docs/G1_PROTOCOL_REFERENCE.md`.
+4. **`0x1E 0x03 NOTE_TEXT_EDIT`** — pinned 2026-04-17 via PacketLogger
+   capture of the official Even iOS app. Non-empty body is
+   `[slot_id][0x01][title_len:u8][title_utf8][body_len:u16 LE][body_utf8]`;
+   empty slots use a fixed 7-byte template. Critical protocol semantic:
+   **replace-all-4-slots** — every update writes 4 packets, one per
+   slot, whether or not each slot changed. The `0x08 NOTE_ADD` and
+   `0x07 NOTE_STATUS_EDIT` sub-commands declared in Gadgetbridge are
+   never emitted by the Even app — `0x03` is the single unified write.
+   Layout in `docs/G1_PROTOCOL_REFERENCE.md`.
+5. **`0x22 0x05`** (new, not in prior docs) — right-arm-only status/ack
+   fired after every dashboard ping. Format `22 05 00 <seq> 01`, response
+   `22 05 00 <seq> 01 0A 01 01`. Trailing bytes unexplained. Our app
+   doesn't need to emit this — it's specific to the Even app's keepalive
+   strategy. Layout in `docs/G1_PROTOCOL_REFERENCE.md`.
 
-### Blocked on live-traffic sniff
+### Still blocked
 
-4. **`0x1E 0x03 NOTE_TEXT_EDIT`** — *no public source implements this*.
-   Gadgetbridge, MentraOS, and the official `EvenDemoApp` all declare the
-   sub-command constants but none serialize a payload. Gadgetbridge's own
-   comments are speculative. Pin-down requires running the official Even
-   Realities app against a BLE sniffer while it adds/edits/deletes a
-   quick note.
-5. **`0x1E 0x08 NOTE_ADD`** — same gap as (4).
-6. **`0x06 0x04 STOCKS` and `0x06 0x05 NEWS`** — same gap. The news and
-   stocks panes exist in firmware (addressable via `DashboardPaneMode`)
-   but the payload format is undocumented. News was considered as a
-   contextual-text alternative to Quick Notes; it's blocked on the same
-   sniff. Good news: one capture session covers both `0x1E` and
-   `0x06 0x04/0x05`.
-7. **`0x58 DASHBOARD_CALENDAR_NEXT_UP_SET`** — declared in
-   `G1Constants.java:140`, never used anywhere. Same live-sniff story.
+6. **`0x06 0x04 STOCKS` and `0x06 0x05 NEWS`** — not triggered in the
+   Quick Notes sniff session. The Even app only emits these when the user
+   enables those dashboard panes. Needs a follow-up session where the
+   tester toggles stocks / news on and adds items.
+7. **`0x58 DASHBOARD_CALENDAR_NEXT_UP_SET`** — not observed. Theory: fires
+   when a calendar event transitions to "next up". To trigger, create a
+   calendar event starting in ~5 min and capture across the transition.
 
-### Material consequence
+### Material consequence (resolved)
 
-Quick Notes is the migration plan's chosen home for contextual sources
-(transit, notifications). Without the `0x1E` payload layout, we cannot
-ship Q3 ("slot 0 only, overwrite"). Options:
+Quick Notes is now implementable. The surprise from the sniff is that the
+protocol is **replace-all-4-slots**, not per-slot add/delete. That changes
+Q3's "slot 0 only, overwrite" — we can still dedicate one slot to contextual
+content, but the Swift write always emits 4 packets per update (the
+contextual slot + 3 empty templates). See revised Q3 below.
 
-- **A. Sniff-first.** Set up a macOS `PacketLogger` or Android HCI snoop
-  capture against the official Even app. Pin down the `0x1E` byte layout,
-  update the reference doc, then proceed with the original plan.
-- **B. Temporary hybrid.** Push firmware dashboard for time/weather/
-  calendar (the three pinned commands) but keep the current bitmap
-  glance for contextual sources until Quick Notes is decoded. Phase 3
-  would drop the bitmap *only* for the calendar/weather/time path.
-- **C. Drop contextual-on-glass entirely.** Transit/notifications become
-  AI-triggered ("Hey Claude, what's my next bus?") rather than
-  passive glance data. Retires the bitmap pipeline entirely with no
-  Quick Notes dependency.
+Options A/B/C from the pre-sniff plan: A was executed. Not backtracking.
 
-**Recommendation:** start with A (sniff) — a single 30-minute capture
-session covers Quick Notes, News, Stocks, **and** `0x58` next-up. One
-sniff unblocks four commands, not just one. Fall back to B if the sniff
-is messier than expected. C is a bigger product pivot and should not
-be forced by a protocol blocker.
+### Sniff-session protocol
 
-### Sniff-session protocol (when we run it)
+First session complete (2026-04-17, Quick Notes). See
+[`docs/ble-sniff-analysis.md`](../../ble-sniff-analysis.md) for the evergreen
+instruction doc used (and to be used for the remaining stocks/news/0x58
+sessions). Correction from what that doc originally said:
 
-See **`docs/ble-sniff-analysis.md`** for the full Claude instruction doc
-(what to read, how to decode, what to produce). Short version:
-
-1. Pair G1 with the official Even Realities app on a fresh install.
-2. Start BLE capture — macOS PacketLogger (Bluetooth Developer Menu),
-   filter ATT handles `0x0403` / `0x0405`, hit Clear right before the
-   test sequence, save when done.
-3. Keep a timestamped log of every action in the Even app (add note,
-   edit, delete, enable stocks, etc.) so packets can be matched to intent.
-4. Hand the `.pklg` + timestamp log to Claude with the instruction doc —
-   it will decode, update `docs/G1_PROTOCOL_REFERENCE.md`, and ship the
-   Swift helpers in one pass.
+- ATT write handle is **`0x0015`**, not `0x0403/0x0405`. Arms differ at the
+  HCI connection-handle layer (`0x0401` / `0x0404`), not at ATT.
+- PacketLogger's default text export truncates at 16 hex bytes per value,
+  which is useless for >16-byte packets. Use the **"Include Packet Bytes"**
+  export mode; each row gains a trailing full-HCI byte sequence.
 
 ## Product decisions (resolved)
 
@@ -148,21 +140,26 @@ react to dashboard-show at all because data push is cadence-driven, not
 event-driven (cheap enough to keep pushing on the 60 s tick regardless of
 whether the user is looking).
 
-**Q3 — Quick Note slots.** *Decision: slot 0 only, overwrite.* The firmware
-has 4 slots. We claim slot 0 as "active contextual note" and leave slots
-1–3 alone. Every refresh tick: if a contextual source wins (transit /
-notifications), overwrite slot 0 with its text; if nothing wins, delete
-slot 0. Calendar, weather, news have their own firmware panes — they
-don't go to the note slot.
+**Q3 — Quick Note slots.** *Decision: one dedicated contextual slot,
+replace-all on every update.* The firmware has 4 slots (1-based, 1..4).
+Per the 2026-04-17 sniff, the wire protocol is **replace-all-4-slots** —
+every user action emits 4 packets, one per slot, whether or not each
+slot changed. We claim **slot 1** as "active contextual note"; slots 2–4
+are always written as the empty 7-byte template. Every refresh tick:
+if a contextual source wins (transit / notifications), write slot 1 with
+its text; if nothing wins, write slot 1 as empty too. Calendar, weather,
+news have their own firmware panes — they don't go to the note slot.
 
 Why single-slot rather than one-per-source:
 - Firmware renders notes in slot-id order (not our priority order), so
   "contextual on top" across multiple slots isn't achievable.
 - Stale notes from past-relevant sources would linger until evicted.
-- User isn't running the Even app in parallel — slots 1–3 being empty
+- User isn't running the Even app in parallel — slots 2–4 staying empty
   doesn't waste anything.
 
-Phase 1 still needs to probe body char cap + update rate limits.
+Swift surface is a single `setSlotsPackets([QuickNote?], startingSeq:)`
+call, not add/delete/edit — that matches the firmware protocol. Phase 1
+still needs to probe body char cap + update rate limits.
 
 **Q4 — AI response stays on `0x4E`.** *Correction to an earlier misread.*
 `0x4E` is the firmware's native Even AI response surface, not our custom
@@ -248,12 +245,12 @@ calendar pane is already showing it, no Quick Note needed.
 **Phase 1a (complete):** byte layouts for the three `0x06` commands are
 pinned. See `docs/G1_PROTOCOL_REFERENCE.md`.
 
-**Phase 1b (blocked):** Quick-Notes layout needs a BLE sniff session with
-the official Even Realities app. Until that lands, the quick-note helpers
-in the shopping list below are not implementable.
+**Phase 1b (complete, 2026-04-17):** Quick-Notes `0x1E 0x03` layout pinned
+via PacketLogger capture of the official Even Realities iOS app. Swift
+helper signature locked in below. Stocks (`0x06 0x04`), News (`0x06 0x05`),
+and `0x58` next-up remain blocked on follow-up sniff sessions.
 
-**Phase 1c — empirical probes via `BleProbeView`** (once quick-note layout is
-known):
+**Phase 1c — empirical probes via `BleProbeView`**:
 - Push a single quick note, confirm render in Quick Notes pane.
 - Push notes at ids 0..N until firmware rejects or wraps — establishes
   slot cap.
@@ -267,21 +264,25 @@ known):
 
 Code changes:
 
-**Shippable now** (Gadgetbridge-pinned):
+**Shippable now:**
 - Add helpers in `COGOS/Protocol/Proto.swift`:
   ```swift
   func setDashboardTimeAndWeather(now: Date, weather: WeatherInfo) async
   func setDashboardCalendar(_ events: [CalendarEvent]) async
   func setDashboardMode(_ mode: DashboardMode, paneMode: DashboardPaneMode) async
+  func setQuickNoteSlots(_ slots: [QuickNote?]) async   // always 4 entries, 1-based
   ```
 - New file: `COGOS/Protocol/DashboardTypes.swift` for `DashboardMode`,
-  `DashboardPaneMode`, `WeatherId`, `CalendarEvent`, `WeatherInfo` structs.
+  `DashboardPaneMode`, `WeatherId`, `CalendarEvent`, `WeatherInfo`, `QuickNote`.
+- New file: `COGOS/Protocol/QuickNoteProto.swift` with
+  `setSlotsPackets(_ slots: [QuickNote?], startingSeq: UInt8) -> [Data]` —
+  emits 4 packets (non-empty or 7-byte empty template per slot).
 
-**Deferred until sniff complete:**
+**Deferred until follow-up sniff:**
   ```swift
-  func addQuickNote(id: UInt8, title: String, body: String) async
-  func updateQuickNote(id: UInt8, title: String, body: String) async
-  func deleteQuickNote(id: UInt8) async
+  func setDashboardStocks(_ tickers: [String]) async        // 0x06 0x04
+  func setDashboardNews(_ headlines: [NewsHeadline]) async  // 0x06 0x05
+  func setDashboardNextUp(_ event: CalendarEvent?) async    // 0x58
   ```
 
 ### Phase 2 — Dual-push (bitmap + firmware, with a flag)

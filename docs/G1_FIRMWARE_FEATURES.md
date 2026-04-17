@@ -263,16 +263,23 @@ use any of them. Listed for future reference.
 
 ### Quick note sub-commands (`0x1E`)
 
-| Byte | Meaning |
-|------|---------|
-| `0x01` | Audio metadata get |
-| `0x02` | Audio file get |
-| `0x03` | Note text edit (has its own sub-sub-commands: add/update/delete) |
-| `0x04` | Audio file delete |
-| `0x05` | Audio record delete |
-| `0x07` | Note status edit (checkmark toggle) |
-| `0x08` | Note add |
-| `0x0A` | Note status edit (variant 2) |
+| Byte | Meaning | Observed in Even app? |
+|------|---------|------------------------|
+| `0x01` | Audio metadata get | — |
+| `0x02` | Audio file get | — |
+| `0x03` | Note text write (unified add/edit/clear) | **yes** (2026-04-17 sniff) |
+| `0x04` | Audio file delete | — |
+| `0x05` | Audio record delete | — |
+| `0x07` | Note status edit (checkmark toggle) | no |
+| `0x08` | Note add | no |
+| `0x0A` | Note status edit (variant 2) | no |
+
+Per live capture of the official Even iOS app, `0x03` is the single
+unified write — no sub-sub-commands. Add, edit, and clear are all
+expressed as `0x03` with body content variation (populated body vs the
+fixed 7-byte empty-slot template). Every user action writes exactly 4
+packets back-to-back, one per slot (1..4). The declared `0x07` / `0x08`
+/ `0x0A` sub-commands are never emitted in practice.
 
 The glasses have on-device audio recording tied to quick notes. Files are
 transferred via `0x02 AUDIO_FILE_GET`.
