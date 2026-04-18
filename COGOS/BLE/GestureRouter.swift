@@ -6,12 +6,10 @@ import Foundation
 @MainActor
 final class GestureRouter {
     private let session: EvenAISession
-    private let glance: GlanceService
     private weak var bluetooth: BluetoothManager?
 
-    init(session: EvenAISession, glance: GlanceService, bluetooth: BluetoothManager) {
+    init(session: EvenAISession, bluetooth: BluetoothManager) {
         self.session = session
-        self.glance = glance
         self.bluetooth = bluetooth
     }
 
@@ -24,31 +22,23 @@ final class GestureRouter {
         case 0x00: // ACTION_DOUBLE_TAP_FOR_EXIT (legacy)
             break
         case 0x01: // ACTION_SINGLE_TAP
-            if glance.isShowing {
-                glance.dismiss()
-            } else if lr == "L" {
+            if lr == "L" {
                 session.lastPageByTouchpad()
             } else {
                 session.nextPageByTouchpad()
             }
-        case 0x02: // ACTION_HEAD_UP
-            if lr == "R" && !session.isReceivingAudio && !session.isRunning {
-                Task { await glance.showGlance() }
-            }
-        case 0x03: // ACTION_HEAD_DOWN
-            if glance.isShowing {
-                glance.dismiss()
-            }
+        case 0x02, 0x03:
+            // ACTION_HEAD_UP / ACTION_HEAD_DOWN — firmware renders the
+            // dashboard on head-up from the latched state we refresh each
+            // tick. No app-side action needed.
+            break
         case 0x04, 0x05:
             // ACTION_SILENT_MODE_{ENABLED,DISABLED} — firmware telemetry,
             // not a user action we want to react to.
             break
         case 0x06: // STATE_WORN
-            if !session.isRunning && !glance.isShowing {
-                Task { await glance.showGlance() }
-            }
+            break
         case 0x07, 0x08: // STATE_NOT_WORN_NO_CASE / STATE_IN_CASE_LID_OPEN
-            if glance.isShowing { glance.dismiss() }
             if session.isRunning { session.exitAll() }
         case 0x0B: // STATE_IN_CASE_LID_CLOSED
             break
@@ -80,8 +70,6 @@ final class GestureRouter {
         case 0x20: // ACTION_DOUBLE_TAP
             if session.isRunning {
                 session.exitAll()
-            } else {
-                Task { await glance.forceRefreshAndShow() }
             }
         default:
             print("Unhandled 0xF5 event: 0x\(String(format: "%02x", notifyIndex))")

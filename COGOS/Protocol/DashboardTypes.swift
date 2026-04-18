@@ -69,7 +69,7 @@ struct CalendarEvent {
 /// Firmware has 4 slots (1-based); every update rewrites all 4 — see
 /// `QuickNoteProto.setSlotsPackets` and the pinned layout in
 /// `docs/G1_PROTOCOL_REFERENCE.md`.
-struct QuickNote {
+struct QuickNote: Equatable {
     var title: String
     var body: String
 }

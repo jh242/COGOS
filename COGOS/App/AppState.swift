@@ -17,7 +17,6 @@ final class AppState: ObservableObject {
     let speech: SpeechStreamRecognizer
 
     private var cancellables: Set<AnyCancellable> = []
-    private var heartbeatTask: Task<Void, Never>?
     private var started = false
 
     init() {
@@ -30,10 +29,8 @@ final class AppState: ObservableObject {
         let requestQueue = BleRequestQueue(bluetooth: bluetooth)
         let proto = Proto(queue: requestQueue)
         let session = EvenAISession(proto: proto, speech: speech, settings: settings)
-        let glance = GlanceService(proto: proto, location: location, session: session,
-                                    requestQueue: requestQueue, bluetooth: bluetooth,
-                                    settings: settings)
-        let gestureRouter = GestureRouter(session: session, glance: glance, bluetooth: bluetooth)
+        let glance = GlanceService(proto: proto, location: location, session: session)
+        let gestureRouter = GestureRouter(session: session, bluetooth: bluetooth)
 
         self.settings = settings
         self.history = history
@@ -85,49 +82,21 @@ final class AppState: ObservableObject {
     private func handleConnectionStateChange(_ state: BluetoothManager.ConnectionState) {
         switch state {
         case .connected:
-            startHeartbeat()
             glance.startTimer()
             Task {
                 await whitelist.pushToGlasses(proto: proto)
                 await proto.setHeadUpAngle(settings.headUpAngle)
                 await proto.setWearDetection(enabled: true)
                 await proto.queryBatteryAndFirmware()
-                if settings.useFirmwareDashboard {
-                    // Claim DUAL + Quick Notes once at connect. The per-tick
-                    // refresh only writes Time+Weather and Quick Notes slot
-                    // contents, so firmware keeps rendering our pane choice
-                    // across the session.
-                    _ = await proto.setDashboardMode(.dual, paneMode: .quickNotes)
-                }
+                _ = await proto.setDashboardMode(.dual, paneMode: .quickNotes)
             }
         case .disconnected, .scanning, .connecting:
-            stopHeartbeat()
             glance.stopTimer()
         }
     }
 
-    private func startHeartbeat() {
-        stopHeartbeat()
-        heartbeatTask = Task.detached { [weak self] in
-            guard let self = self else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 8 * 1_000_000_000)
-                if Task.isCancelled { break }
-                var ok = await self.proto.sendHeartBeat()
-                if !ok { ok = await self.proto.sendHeartBeat() }
-                _ = ok
-            }
-        }
-    }
-
-    private func stopHeartbeat() {
-        heartbeatTask?.cancel()
-        heartbeatTask = nil
-    }
-
-    /// Exit AI + glance screens (bound to double-tap from gesture router).
+    /// Exit AI session (bound to double-tap from gesture router).
     func exitAll() {
-        glance.dismiss()
         if session.isRunning {
             Task { await session.stopEvenAIByOS() }
         }

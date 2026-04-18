@@ -1,20 +1,33 @@
-import CoreGraphics
-import CoreText
 import Foundation
 
-final class NewsSource: GlanceSource {
+/// Fallback provider — shows cached headlines when nothing higher-priority
+/// is eligible. Because every other provider compact-filters out when idle,
+/// News naturally fills a bottom slot once its cache is populated.
+final class NewsSource: ContextProvider {
     let name = "news"
-    var enabled = true
-    var cacheDuration: TimeInterval = 1800
-    var tier: GlanceTier = .fallback
+    let priority = 3
+
+    private static let refreshInterval: TimeInterval = 30 * 60
 
     var topic: String = "BUSINESS"
 
+    private var lastFetch: Date?
     private var cachedHeadlines: [String] = []
 
-    func fetch(context: GlanceContext) async -> String? {
+    var currentNote: QuickNote? {
+        guard !cachedHeadlines.isEmpty else { return nil }
+        let body = cachedHeadlines.prefix(3).joined(separator: "\n")
+        return QuickNote(title: "News", body: body)
+    }
+
+    func refresh(_ ctx: GlanceContext) async {
+        if let last = lastFetch, ctx.now.timeIntervalSince(last) < Self.refreshInterval {
+            return
+        }
+        lastFetch = ctx.now
+
         let urlStr = "https://news.google.com/rss/headlines/section/topic/\(topic)?hl=en-US&gl=US&ceid=US:en"
-        guard let url = URL(string: urlStr) else { return nil }
+        guard let url = URL(string: urlStr) else { return }
 
         var req = URLRequest(url: url)
         req.timeoutInterval = 5
@@ -23,48 +36,21 @@ final class NewsSource: GlanceSource {
             pair = try await URLSession.shared.data(for: req)
         } catch {
             trace("RSS fetch threw: \(error)")
-            return nil
+            return
         }
         let (data, response) = pair
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             trace("RSS HTTP \(http.statusCode)")
-            return nil
+            return
         }
 
         let titles = GoogleNewsRSSParser.parseItemTitles(data)
         guard !titles.isEmpty else {
             trace("RSS parsed 0 titles")
-            cachedHeadlines = []
-            return nil
+            return
         }
-        trace("RSS → \(titles.count) titles")
-
         cachedHeadlines = titles.prefix(5).map { cleanTitle($0) }
-        let headlines = cachedHeadlines.prefix(3).map { "- \($0)" }
-        return "News:\n\(headlines.joined(separator: "\n"))"
-    }
-
-    func quickNote() -> QuickNote? {
-        guard !cachedHeadlines.isEmpty else { return nil }
-        let body = cachedHeadlines.prefix(3).joined(separator: "\n")
-        return QuickNote(title: "News", body: body)
-    }
-
-    func drawContent(in rect: CGRect, context: CGContext) -> Bool {
-        guard !cachedHeadlines.isEmpty else { return false }
-        let font = CTFontCreateWithName("SFProDisplay-Regular" as CFString, 19, nil)
-
-        var y = rect.maxY - 8
-        for headline in cachedHeadlines {
-            let truncated = GlanceDrawing.truncateToFit(headline, font: font, maxWidth: rect.width)
-            y = GlanceDrawing.drawText(
-                truncated, at: CGPoint(x: rect.minX, y: y),
-                font: font, in: context
-            )
-            y -= 8
-            if y < rect.minY + 10 { break }
-        }
-        return true
+        trace("RSS → \(cachedHeadlines.count) headlines")
     }
 
     private func cleanTitle(_ raw: String) -> String {

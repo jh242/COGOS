@@ -27,13 +27,7 @@ final class NativeLocation: NSObject, CLLocationManagerDelegate {
     }
 
     func checkPermission() -> PermissionStatus {
-        let status: CLAuthorizationStatus
-        if #available(iOS 14.0, *) {
-            status = manager.authorizationStatus
-        } else {
-            status = CLLocationManager.authorizationStatus()
-        }
-        switch status {
+        switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways: return .granted
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined

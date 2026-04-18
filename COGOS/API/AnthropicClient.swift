@@ -44,39 +44,25 @@ final class AnthropicClient: NSObject {
                 req.timeoutInterval = 60
 
                 do {
-                    if #available(iOS 15.0, *) {
-                        let (bytes, response) = try await URLSession.shared.bytes(for: req)
-                        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-                            continuation.finish(throwing: NSError(domain: "Anthropic", code: http.statusCode,
-                                userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"]))
-                            return
-                        }
-                        let parser = SSEParser()
-                        var bufferData = Data()
-                        for try await byte in bytes {
-                            bufferData.append(byte)
-                            if byte == 0x0a { // newline; flush
-                                let events = parser.feed(bufferData)
-                                bufferData.removeAll(keepingCapacity: true)
-                                for event in events {
-                                    self.emitDelta(event: event, continuation: continuation)
-                                }
+                    let (bytes, response) = try await URLSession.shared.bytes(for: req)
+                    if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                        continuation.finish(throwing: NSError(domain: "Anthropic", code: http.statusCode,
+                            userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"]))
+                        return
+                    }
+                    let parser = SSEParser()
+                    var bufferData = Data()
+                    for try await byte in bytes {
+                        bufferData.append(byte)
+                        if byte == 0x0a {
+                            let events = parser.feed(bufferData)
+                            bufferData.removeAll(keepingCapacity: true)
+                            for event in events {
+                                self.emitDelta(event: event, continuation: continuation)
                             }
                         }
-                        continuation.finish()
-                    } else {
-                        // iOS 14 fallback: data task
-                        let (data, response) = try await URLSession.shared.data(for: req)
-                        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-                            continuation.finish(throwing: NSError(domain: "Anthropic", code: http.statusCode))
-                            return
-                        }
-                        let parser = SSEParser()
-                        for event in parser.feed(data) {
-                            self.emitDelta(event: event, continuation: continuation)
-                        }
-                        continuation.finish()
                     }
+                    continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }

@@ -1,33 +1,49 @@
-import CoreGraphics
 import CoreLocation
-import CoreText
 import Foundation
 
-private let maxStationDistance: CLLocationDistance = 500  // meters
-
-final class TransitSource: GlanceSource {
+/// Nearest-transit-station arrivals. Eligible when the user is within 200m
+/// of a station and the station has upcoming arrivals; otherwise nil.
+final class TransitSource: ContextProvider {
     let name = "transit"
-    var enabled = true
-    var cacheDuration: TimeInterval = 120
+    let priority = 1
+
+    private static let stationGateMeters: CLLocationDistance = 200
+    private static let refreshInterval: TimeInterval = 60
 
     let location: NativeLocation
 
+    private var lastFetch: Date?
     private var cachedStation: String = ""
+    private var cachedStationLocation: CLLocation?
     private var cachedArrivals: [(route: String, dir: String, mins: Int)] = []
 
     init(location: NativeLocation) {
         self.location = location
     }
 
-    func relevance(_ ctx: GlanceContext) async -> Int? {
-        guard ctx.userLocation != nil else { return nil }
-        return 1
+    var currentNote: QuickNote? {
+        guard !cachedStation.isEmpty,
+              let stationLoc = cachedStationLocation,
+              let userLoc = location.lastKnownLocation(),
+              stationLoc.distance(from: userLoc) <= Self.stationGateMeters else {
+            return nil
+        }
+        guard !cachedArrivals.isEmpty else { return nil }
+        let body = cachedArrivals
+            .map { "\($0.route)\($0.dir)  \($0.mins) min" }
+            .joined(separator: "\n")
+        return QuickNote(title: cachedStation, body: body)
     }
 
-    func fetch(context: GlanceContext) async -> String? {
-        guard let userLoc = context.userLocation else {
+    func refresh(_ ctx: GlanceContext) async {
+        if let last = lastFetch, ctx.now.timeIntervalSince(last) < Self.refreshInterval {
+            return
+        }
+        lastFetch = ctx.now
+
+        guard let userLoc = ctx.userLocation else {
             trace("no user location — skipping")
-            return nil
+            return
         }
 
         let stations: [WTFTClient.Station]
@@ -38,85 +54,37 @@ final class TransitSource: GlanceSource {
             )
         } catch {
             trace("WTFT fetch threw: \(error)")
-            return nil
+            return
         }
 
-        guard let station = stations.first else {
-            trace("WTFT returned 0 stations near \(userLoc.coordinate.latitude),\(userLoc.coordinate.longitude)")
-            return nil
-        }
-        guard let lat = station.latitude, let lon = station.longitude else {
-            trace("station \(station.name) missing coordinates")
-            return nil
-        }
-
-        let distMeters = CLLocation(latitude: lat, longitude: lon).distance(from: userLoc)
-        guard distMeters <= maxStationDistance else {
-            trace("nearest station \(station.name) is \(Int(distMeters)) m — over \(Int(maxStationDistance)) m limit")
-            return nil
+        guard let station = stations.first,
+              let lat = station.latitude,
+              let lon = station.longitude else {
+            trace("no station with coordinates near user")
+            cachedStation = ""
+            cachedStationLocation = nil
+            cachedArrivals = []
+            return
         }
 
-        let distStr = "\(Int(distMeters.rounded())) m"
+        let stationLoc = CLLocation(latitude: lat, longitude: lon)
+        let distMeters = stationLoc.distance(from: userLoc)
 
-        let now = context.now
+        cachedStationLocation = stationLoc
+        cachedStation = "\(station.name) (\(Int(distMeters.rounded())) m)"
+
+        let now = ctx.now
         var combined: [(dir: String, arr: WTFTClient.Arrival)] = station.N.map { ("↑", $0) }
         combined.append(contentsOf: station.S.map { ("↓", $0) })
         let future = combined.filter { $0.arr.time > now }
-        let sorted = future.sorted { $0.arr.time < $1.arr.time }
-        let upcoming = Array(sorted.prefix(5))
+        let upcoming = future.sorted { $0.arr.time < $1.arr.time }.prefix(5)
 
-        cachedStation = "\(station.name) (\(distStr))"
         cachedArrivals = upcoming.map { item in
             let mins = max(0, Int(item.arr.time.timeIntervalSince(now) / 60))
             return (route: item.arr.route, dir: item.dir, mins: mins)
         }
 
-        if upcoming.isEmpty {
-            return "Transit: \(station.name) (\(distStr)) · no arrivals"
-        }
-        let parts = cachedArrivals.map { "\($0.route)\($0.dir) \($0.mins)m" }
-        return "Transit: \(station.name) (\(distStr)) · \(parts.joined(separator: ", "))"
-    }
-
-    func quickNote() -> QuickNote? {
-        guard !cachedStation.isEmpty else { return nil }
-        let body: String
-        if cachedArrivals.isEmpty {
-            body = "no arrivals"
-        } else {
-            body = cachedArrivals
-                .map { "\($0.route)\($0.dir)  \($0.mins) min" }
-                .joined(separator: "\n")
-        }
-        return QuickNote(title: cachedStation, body: body)
-    }
-
-    func drawContent(in rect: CGRect, context: CGContext) -> Bool {
-        guard !cachedArrivals.isEmpty else { return false }
-        let headerFont = CTFontCreateWithName("SFProDisplay-Medium" as CFString, 20, nil)
-        let font = CTFontCreateWithName("SFProDisplay-Regular" as CFString, 20, nil)
-        let routeColWidth: CGFloat = 60
-
-        var y = rect.maxY - 8
-        // Station header.
-        y = GlanceDrawing.drawText(
-            cachedStation, at: CGPoint(x: rect.minX, y: y),
-            font: headerFont, in: context
-        )
-        y -= 8
-
-        for arrival in cachedArrivals {
-            let routeStr = "\(arrival.route)\(arrival.dir)"
-            let timeStr = "\(arrival.mins) min"
-            y = GlanceDrawing.drawAlignedRow(
-                left: routeStr, right: timeStr,
-                at: y, in: rect,
-                leftWidth: routeColWidth,
-                font: font, context: context
-            )
-            y -= 4
-            if y < rect.minY + 10 { break }
-        }
-        return true
+        let gated = distMeters <= Self.stationGateMeters ? "in-range" : "out-of-range"
+        trace("\(station.name) \(Int(distMeters))m [\(gated)] · \(cachedArrivals.count) arrivals")
     }
 }

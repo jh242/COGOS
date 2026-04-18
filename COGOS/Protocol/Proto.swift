@@ -5,7 +5,6 @@ import Foundation
 actor Proto {
     private let queue: BleRequestQueue
     private var evenaiSeq: Int = 0
-    private var beatHeartSeq: Int = 0
     private var dashboardSeq: UInt8 = 0
 
     init(queue: BleRequestQueue) {
@@ -31,28 +30,6 @@ actor Proto {
         let data = Data([0x0E, 0x00])
         let ret = await queue.request(data, lr: lr)
         return (ret?.data.count ?? 0) >= 2 && ret?.data[1] == 0xc9
-    }
-
-    // MARK: - Heartbeat
-
-    @discardableResult
-    func sendHeartBeat() async -> Bool {
-        let length = 6
-        let seq = UInt8(beatHeartSeq % 0xff)
-        let data = Data([
-            0x25,
-            UInt8(length & 0xff),
-            UInt8((length >> 8) & 0xff),
-            seq,
-            0x04,
-            seq
-        ])
-        beatHeartSeq += 1
-
-        guard let lRet = await queue.request(data, lr: "L", timeoutMs: 1500) else { return false }
-        guard lRet.data.count > 5, lRet.data[0] == 0x25, lRet.data[4] == 0x04 else { return false }
-        guard let rRet = await queue.request(data, lr: "R", timeoutMs: 1500) else { return false }
-        return rRet.data.count > 5 && rRet.data[0] == 0x25 && rRet.data[4] == 0x04
     }
 
     // MARK: - Even AI data transport

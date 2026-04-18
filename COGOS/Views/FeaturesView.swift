@@ -11,8 +11,6 @@ struct FeaturesView: View {
                 .frame(maxWidth: .infinity).frame(height: 60).background(Color.white.cornerRadius(5))
             NavigationLink("Text Send", destination: TextEntryView()).buttonStyle(.plain)
                 .frame(maxWidth: .infinity).frame(height: 60).background(Color.white.cornerRadius(5))
-            NavigationLink("BMP Send", destination: BmpView()).buttonStyle(.plain)
-                .frame(maxWidth: .infinity).frame(height: 60).background(Color.white.cornerRadius(5))
             Spacer()
         }
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 44)

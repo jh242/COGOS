@@ -12,7 +12,7 @@ over dual BLE (one connection per arm), streams LC3 audio from the glasses
 microphone, transcribes speech via the native iOS Speech framework, calls the
 Claude API, and renders the reply on the glasses waveguide display.
 
-Pure Swift / SwiftUI. iOS 14+. Bundle ID: `com.jackhu.cogos`.
+Pure Swift / SwiftUI. iOS 18+. Bundle ID: `com.jackhu.cogos`.
 
 ---
 
@@ -39,7 +39,7 @@ Pure Swift / SwiftUI. iOS 14+. Bundle ID: `com.jackhu.cogos`.
 COGOS/
   App/               SwiftUI @main, AppState, ContentView
   BLE/               BluetoothManager, BleRequestQueue, GestureRouter, UUIDs
-  Protocol/          Proto, EvenAIProto, BmpTransfer, CRC32XZ
+  Protocol/          Proto, EvenAIProto, DashboardProto, QuickNoteProto, CRC32XZ
   Session/           EvenAISession, SpeechStreamRecognizer, TextPaginator,
                      PcmConverter, LC3 codec (C)
   API/               AnthropicClient, HaikuClient, CoworkRelayClient, SSEParser

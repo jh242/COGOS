@@ -1,6 +1,6 @@
 # COGOS (Swift)
 
-Pure-Swift / SwiftUI port of the COGOS app. iOS-only. Targets iOS 14+.
+Pure-Swift / SwiftUI port of the COGOS app. iOS-only. Targets iOS 18+.
 
 ## Xcode project setup
 
@@ -30,7 +30,7 @@ the Xcode scheme.
 COGOS/
 ├── App/               SwiftUI App, root state, ContentView
 ├── BLE/               BluetoothManager, BleRequestQueue, GestureRouter, UUIDs
-├── Protocol/          Proto, EvenAIProto, BmpTransfer, CRC32XZ
+├── Protocol/          Proto, EvenAIProto, DashboardProto, QuickNoteProto, CRC32XZ
 ├── Session/           EvenAISession, SpeechStreamRecognizer, TextPaginator,
 │                      ClaudeSession, PcmConverter, LC3 codec
 ├── API/               AnthropicClient, CoworkRelayClient, SSEParser

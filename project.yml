@@ -2,7 +2,7 @@ name: COGOS
 options:
   bundleIdPrefix: com.jackhu
   deploymentTarget:
-    iOS: "14.0"
+    iOS: "18.0"
   xcodeVersion: "16.0"
   generateEmptyDirectories: false
 
@@ -24,6 +24,9 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
         GENERATE_INFOPLIST_FILE: false
+    dependencies:
+      - sdk: WeatherKit.framework
     entitlements:
       path: COGOS/Supporting/COGOS.entitlements
-      properties: {}
+      properties:
+        com.apple.developer.weatherkit: true
