@@ -105,16 +105,16 @@ Options A/B/C from the pre-sniff plan: A was executed. Not backtracking.
 
 ### Sniff-session protocol
 
-First session complete (2026-04-17, Quick Notes). See
-[`docs/ble-sniff-analysis.md`](../../ble-sniff-analysis.md) for the evergreen
-instruction doc used (and to be used for the remaining stocks/news/0x58
-sessions). Correction from what that doc originally said:
+First session complete (2026-04-17, Quick Notes). Byte layouts are pinned
+inline in `docs/G1_PROTOCOL_REFERENCE.md`. For follow-up sessions
+(stocks/news/`0x58`), the workflow is:
 
-- ATT write handle is **`0x0015`**, not `0x0403/0x0405`. Arms differ at the
-  HCI connection-handle layer (`0x0401` / `0x0404`), not at ATT.
+- ATT write handle: **`0x0015`** on both arms. Arms differ at the HCI
+  connection-handle layer (`0x0401` / `0x0404`), not at ATT.
 - PacketLogger's default text export truncates at 16 hex bytes per value,
-  which is useless for >16-byte packets. Use the **"Include Packet Bytes"**
-  export mode; each row gains a trailing full-HCI byte sequence.
+  which is useless for >16-byte packets. Use **"Include Packet Bytes"**
+  export mode — each row gains a trailing full-HCI byte sequence.
+- Wireshark downlink filter: `btatt.handle == 0x0015 && btatt.opcode == 0x52`.
 
 ## Product decisions (resolved)
 

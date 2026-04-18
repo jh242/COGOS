@@ -1,9 +1,11 @@
-# G1 BLE Protocol — Code Reference
+# G1 BLE Protocol — Reference
 
-Comprehensive reference for all known byte codes used in the Even Realities G1
-BLE protocol. Compiled from the Gadgetbridge reverse-engineered driver
-(`G1Constants.java`, PR #4553), the MentraOS Android driver, and the Even
-Realities EvenDemoApp.
+Comprehensive reference for the Even Realities G1 BLE protocol: byte codes,
+wire layouts, firmware capabilities, and what COGOS currently uses vs.
+ignores. Compiled from the Gadgetbridge reverse-engineered driver
+(`G1Constants.java`, PR #4553), the MentraOS Android driver, the Even
+Realities EvenDemoApp, and live PacketLogger captures of the official
+Even iOS app.
 
 **Sources:**
 - [Gadgetbridge — Even Realities driver (Codeberg PR #4553)](https://codeberg.org/Freeyourgadget/Gadgetbridge/pulls/4553)
@@ -41,6 +43,36 @@ connection handle, not by ATT handle.
 
 ---
 
+## Connection lifecycle
+
+The glasses are dual-BLE and require a specific dance at connect time.
+
+1. **Request MTU 251** on both sides (firmware actually caps payload at 180 B).
+2. **Subscribe** to Nordic UART RX characteristic on both sides.
+3. **Per-side init queries** (both sides):
+   - `INFO_BATTERY_AND_FIRMWARE_GET` (0x2C)
+   - `SYSTEM_CONTROL` + `FIRMWARE_BUILD_STRING_GET` (0x23 0x74)
+   - `SILENT_MODE_GET` (0x2B)
+4. **Left only:**
+   - `BRIGHTNESS_GET` (0x29)
+   - `INFO_SERIAL_NUMBER_GLASSES_GET` (0x34) — encodes frame shape + color
+5. **Right only:**
+   - `HEAD_UP_ANGLE_GET` (0x32)
+   - `HARDWARE_DISPLAY_GET` (0x3B)
+   - `WEAR_DETECTION_GET` (0x3A)
+   - `NOTIFICATION_AUTO_DISPLAY_GET` (0x3C)
+6. **Post-init background tasks** (after both sides ready):
+   - Set dashboard mode, language, time
+   - Start heartbeat loop (critical — glasses auto-disconnect after ~32 s
+     of BLE silence)
+   - Push notification app whitelist to **left only** (large payload)
+   - Sync calendar events
+
+Gadgetbridge sends a heartbeat every 8 s with a 25 s target and 10 s jitter
+budget. COGOS matches at 8 s.
+
+---
+
 ## Message ID (top-level packet type)
 
 The first byte of every packet identifies its category.
@@ -49,7 +81,7 @@ The first byte of every packet identifies its category.
 |------|------|-------|
 | `0x22` | `STATUS` | Status response |
 | `0xF1` | `AUDIO` | LC3 audio chunk (`F1 seq data...`) |
-| `0xF4` | `DEBUG` | Debug log output from glasses |
+| `0xF4` | `DEBUG` | Debug log output from glasses (UTF-8 strings when debug logging enabled) |
 | `0xF5` | `EVENT` | Gesture / state event (see EventId table) |
 
 Everything else in the [Command ID](#command-id-app--glasses) table is a top-level command byte sent from the app.
@@ -127,7 +159,7 @@ Everything else in the [Command ID](#command-id-app--glasses) table is a top-lev
 
 ## EventId (0xF5 payload byte)
 
-These are the values that appear as `packet.data[1]` when the first byte is `0xF5`. **This is where the previously-unknown codes live.**
+These are the values that appear as `packet.data[1]` when the first byte is `0xF5`.
 
 | Byte | Name | Notes |
 |------|------|-------|
@@ -149,7 +181,7 @@ These are the values that appear as `packet.data[1]` when the first byte is `0xF
 | `0x0F` | `INFO_CASE_BATTERY_LEVEL` | Payload: `00`–`64` |
 | `0x10` | *Unknown* | — |
 | `0x11` | `ACTION_BINDING_SUCCESS` | BLE bind confirmation |
-| `0x12` | `ACTION_LONG_PRESS` | Short-form long-press |
+| `0x12` | `ACTION_LONG_PRESS` | Short-form long-press (MentraOS treats as toggle) |
 | `0x17` | `ACTION_LONG_PRESS_HELD` | Long-press started (Even AI start) |
 | `0x18` | `ACTION_LONG_PRESS_RELEASED` | Long-press released (Even AI stop) |
 | `0x1E` | `ACTION_DOUBLE_TAP_DASHBOARD_SHOW` | |
@@ -158,21 +190,24 @@ These are the values that appear as `packet.data[1]` when the first byte is `0xF
 
 ---
 
-## Display text — `0x4E` packet header byte
+## Display text — `0x4E` (AI result / text page)
 
-The upper 4 bits encode display status; lower 4 bits encode the action.
+Multi-packet text rendering for AI responses. The header byte's upper
+4 bits encode display status; lower 4 bits encode the action.
 
 **Status (upper nibble):**
 
-| Byte | Name |
-|------|------|
-| `0x30` | `AI_DISPLAY_AUTO_SCROLL` |
-| `0x40` | `AI_DISPLAY_COMPLETE` |
-| `0x50` | `AI_DISPLAY_MANUAL_SCROLL` |
-| `0x60` | `AI_NETWORK_ERROR` |
-| `0x70` | `TEXT_ONLY` |
+| Byte | Name | Behavior |
+|------|------|----------|
+| `0x30` | `AI_DISPLAY_AUTO_SCROLL` | Auto-advance pages |
+| `0x40` | `AI_DISPLAY_COMPLETE` | Final page, auto mode |
+| `0x50` | `AI_DISPLAY_MANUAL_SCROLL` | User tap-through |
+| `0x60` | `AI_NETWORK_ERROR` | Error state |
+| `0x70` | `TEXT_ONLY` | Plain page (no scroll semantics) |
 
 **Action (lower nibble):** `0x01` = display new content.
+
+**Display hard limits:** **488 px wide, 21 px font, 5 lines per screen.**
 
 ---
 
@@ -282,7 +317,7 @@ committing the prefix bytes in Swift.
 
 Chunking: max body per chunk = `180 − 9 = 171` bytes. Firmware renders
 `time_str` verbatim — it does not parse timestamps. Events auto-clear 5 min
-after start time.
+after start time. Max events: **8** (4 pages × 2 events).
 
 #### `0x06 0x06 MODE` — fixed 7-byte packet
 
@@ -306,7 +341,7 @@ Declared in `G1Constants.java:208-209` and never serialized. Same public-source
 gap as the `0x1E` Quick Notes family — the firmware has the panes (addressable
 via `DashboardPaneMode.STOCKS = 0x01` and `DashboardPaneMode.NEWS = 0x02`) but
 no app implements the payload. Pinning needs a BLE sniff against the official
-Even Realities app.
+Even Realities app with stocks/news panes enabled.
 
 ### DashboardQuickNoteSubcommand (second byte after `0x1E`)
 
@@ -329,6 +364,9 @@ fire in practice — they're constants the firmware accepts but that the
 official app doesn't emit. Our Swift implementation should mirror that:
 only emit `0x03`, and treat "add" and "clear" as the same sub-command with
 different body contents.
+
+The glasses also have on-device audio recording tied to quick notes
+(`0x01`/`0x02`/`0x04`/`0x05` sub-commands). Layouts not yet captured.
 
 #### `0x1E 0x03 NOTE_TEXT_EDIT` — replace-all-4-slots, chunked-TLV body
 
@@ -399,8 +437,6 @@ Clear slot 2:
 1E 10 00 92 03  01 00 01 00   02  00 01 00 01 00 00
 ```
 
-Max calendar events: 8 (4 pages × 2 events).
-
 ### `0x58 DASHBOARD_CALENDAR_NEXT_UP_SET` — layout unknown
 
 Declared in `G1Constants.java:140` and never used in Gadgetbridge,
@@ -433,32 +469,167 @@ command-ID semantics is unclear; treat them as distinct surfaces.
 
 ---
 
+## Notifications
+
+Fully firmware-driven — phone supplies JSON, glasses render and time out.
+
+### App whitelist (`0x04 NOTIFICATION_APP_LIST_SET`)
+
+Chunked JSON, sent to **left side only**:
+```json
+{
+  "calendar_enable": false,
+  "call_enable": false,
+  "msg_enable": false,
+  "ios_mail_enable": false,
+  "app": {
+    "list": [{"id": "bundle.id", "name": "Display Name"}, ...],
+    "enable": true
+  }
+}
+```
+
+### Send notification (`0x4B NOTIFICATION_SEND_CONTROL`)
+
+Chunked JSON using Apple NCS format:
+```json
+{
+  "ncs_notification": {
+    "msg_id": 12345,
+    "action": 0,
+    "app_identifier": "bundle.id",
+    "title": "…",
+    "subtitle": "…",
+    "message": "…",
+    "time_s": 1713200000,
+    "date": "Tue Apr 15 12:00:00 2026",
+    "display_name": "Name"
+  }
+}
+```
+
+### Clear notification (`0x4C NOTIFICATION_CLEAR_CONTROL`)
+
+`4C <msg_id_uint32_be>` — clears by ID.
+
+### Auto-display settings
+
+- `NOTIFICATION_AUTO_DISPLAY_GET` (0x3C) / `SET` (0x4F)
+- Payload: `enabled_byte timeout_byte` (timeout in seconds)
+- When enabled, the HUD wakes up automatically on notification arrival.
+
+---
+
+## Sensors and wear state
+
+### Wear detection (`0x27 WEAR_DETECTION_SET` / `0x3A GET`)
+
+Toggle. When enabled, firmware emits `0xF5` events:
+- `0x06` `STATE_WORN`
+- `0x07` `STATE_NOT_WORN_NO_CASE`
+- `0x08` `STATE_IN_CASE_LID_OPEN`
+- `0x0B` `STATE_IN_CASE_LID_CLOSED`
+
+### Head-up gesture (`0x0B HEAD_UP_ANGLE_SET`)
+
+- Format: `0B angle 01` (magic `0x01` is "level setting")
+- Valid range: **0–60 degrees**
+- Emits `0xF5 0x02` (up) / `0xF5 0x03` (down)
+
+### Head-up action binding (`0x08 HEAD_UP_ACTION_SET`)
+
+Used for binding what happens on head-up — dashboard, AI trigger, etc.
+
+### Head-up mic activation (`0x26 HARDWARE_SET` + `0x08`)
+
+If enabled, head-up gesture also enables the microphone.
+
+### Head-up calibration (`0x10 HEAD_UP_CALIBRATION_CONTROL`)
+
+---
+
+## Display hardware
+
+### Brightness (`0x01 BRIGHTNESS_SET` / `0x29 GET`)
+
+- Payload: `level_byte auto_byte` (auto `0x01` / manual `0x00`)
+- Manual range: 0x00–0x2A (0–42)
+
+### Display geometry (`0x26 HARDWARE_SET` + `0x02 DISPLAY`)
+
+- `26 08 00 seq 02 preview height depth`
+- `height` — waveguide vertical offset (user-configurable in official app)
+- `depth` — focal depth
+- `preview` byte enables a 5-second preview window
+
+### Anti-shake (`0x2A ANTI_SHAKE_GET`)
+
+Get only — stabilization/drift-correction setting.
+
+---
+
 ## Hardware sub-commands (second byte after `0x26`)
 
 | Byte | Name |
 |------|------|
-| `0x02` | `DISPLAY` |
-| `0x04` | `LUM_GEAR` |
-| `0x05` | `DOUBLE_TAP_ACTION` |
+| `0x02` | `DISPLAY` (geometry — see above) |
+| `0x04` | `LUM_GEAR` (luminance step) |
+| `0x05` | `DOUBLE_TAP_ACTION` (rebind on-device action) |
 | `0x06` | `LUM_COEFFICIENT` |
-| `0x07` | `LONG_PRESS_ACTION` |
+| `0x07` | `LONG_PRESS_ACTION` (rebind on-device action) |
 | `0x08` | `HEAD_UP_MIC_ACTIVATION` |
 
 ---
 
-## System sub-commands (second byte after `0x23`)
+## Bitmap display
 
-| Byte | Name |
-|------|------|
-| `0x6C` | `DEBUG_LOGGING_SET` |
-| `0x72` | `REBOOT` |
-| `0x74` | `FIRMWARE_BUILD_STRING_GET` |
+### Upload (`0x15 FILE_UPLOAD`)
 
-Firmware build-string response prefix: `0x6E`.
+- 194-byte chunks
+- First chunk includes address bytes `0x00 0x1C 0x00 0x00`
+
+### Finalize (`0x20 FILE_UPLOAD_COMPLETE`)
+
+Tells firmware the upload is done.
+
+### CRC verify (`0x16 BITMAP_SHOW`)
+
+`16 <crc32_xz_big_endian>` — firmware verifies and renders on pass.
+
+### Exit to dashboard (`0x18 BITMAP_HIDE`)
 
 ---
 
-## Navigation sub-commands (second byte after `0x0A`)
+## Microphone
+
+- `0x0E MICROPHONE_SET`: `0E 01` on / `0E 00` off
+- Firmware then emits `0xF1 seq <lc3_audio>` packets on the notify channel
+- Single long-press (`0xF5 0x17` → `0x18`) is the canonical start/stop trigger
+- `0xF5 0x12 ACTION_LONG_PRESS` (no HELD/RELEASED split) is the short-form
+  version; MentraOS treats it as a toggle
+
+---
+
+## Built-in apps (firmware-native)
+
+These are full features the glasses can run themselves. COGOS currently
+doesn't use any of them — listed for future reference.
+
+| Command | Byte | Notes |
+|---------|------|-------|
+| Teleprompter control | `0x09` | Firmware renders scrolling script |
+| Teleprompter suspend | `0x24` | Pause |
+| Teleprompter position | `0x25` | Seek |
+| Transcribe control | `0x0D` | Native STT (language-dependent) |
+| Translate control | `0x0F` | Native translation |
+| Navigation | `0x0A` | Turn-by-turn (sub-commands below) |
+| Quick note control | `0x1E` | Dashboard note editor + audio recorder (layouts above) |
+| Timer control | `0x07` | Countdown timer |
+| Tutorial control | `0x1F` | Built-in onboarding |
+| Firmware upgrade | `0x17` | OTA |
+| Unpair | `0x47` | Factory unpair |
+
+### Navigation sub-commands (second byte after `0x0A`)
 
 | Byte | Name |
 |------|------|
@@ -472,23 +643,30 @@ Firmware build-string response prefix: `0x6E`.
 
 ---
 
-## Silent mode status
+## System control (`0x23`) sub-commands
 
-| Byte | Name |
-|------|------|
-| `0x0A` | `DISABLE` |
-| `0x0C` | `ENABLE` |
+| Byte | Action |
+|------|--------|
+| `0x6C` | `DEBUG_LOGGING_SET` (payload `0x00` enable / `0x31` disable) |
+| `0x72` | `REBOOT` |
+| `0x74` | `FIRMWARE_BUILD_STRING_GET` — response prefix `0x6E` |
 
-## Debug logging status
-
-| Byte | Name |
-|------|------|
-| `0x00` | `ENABLE` |
-| `0x31` | `DISABLE` |
+When debug logging is on, the glasses emit `0xF4` message packets containing
+UTF-8 log strings from firmware.
 
 ---
 
-## Language IDs
+## Silent mode (`0x03 SILENT_MODE_SET` / `0x2B GET`)
+
+- Payload byte: `0x0C` enable / `0x0A` disable
+- Emitted as events: `0xF5 0x04` enabled / `0xF5 0x05` disabled
+- When on, firmware suppresses notification HUD wake but still delivers gesture events
+
+---
+
+## Language (`0x3D LANGUAGE_SET`)
+
+`3D 06 00 seq 01 lang_byte`
 
 | Byte | Language |
 |------|----------|
@@ -500,6 +678,10 @@ Firmware build-string response prefix: `0x6E`.
 | `0x06` | German |
 | `0x07` | Spanish |
 | `0x0E` | Italian |
+
+Affects built-in transcribe/translate and probably HUD text rendering.
+
+---
 
 ## Temperature unit / Time format
 
@@ -530,16 +712,55 @@ Firmware build-string response prefix: `0x6E`.
 | `0x0D` | Squalls |
 | `0x0E` | Tornado |
 | `0x0F` | Freezing rain |
-| `0x10` | Sunny |
+| `0x10` | Sunny (firmware auto-substitutes `0x01 NIGHT` after sunset) |
 
 ---
 
-## Hardware description (parsed from device info)
+## Device info (queryable)
 
-| Key | Meaning |
-|-----|---------|
-| `S100` | Round frame |
-| `S110` | Square frame |
-| `LAA` | Grey color |
-| `LBB` | Brown color |
-| `LCC` | Green color |
+| Command | Byte | Returns |
+|---------|------|---------|
+| Battery + firmware | `0x2C` | `[frame_type(A/B), battery_%, …, major, …, minor]` |
+| Serial (glasses) | `0x34` | 14-byte ASCII; bytes 0-4 = frame shape (`S100`/`S110`), 4-7 = color (`LAA`/`LBB`/`LCC`) |
+| Serial (lens) | `0x33` | Lens serial |
+| MAC address | `0x2D` | MAC |
+| Firmware build string | `0x23 0x74` | Response prefix `0x6E` |
+| ESB channel | `0x35` | Proprietary RF sub-protocol |
+| ESB notification count | `0x36` | — |
+| Time since boot | `0x37` | Uptime |
+| Buried point | `0x3E` | Telemetry |
+| Running app | `0x39` | Which built-in app is active |
+| Apple notification status | `0x38` | iOS NCS state |
+
+### Frame hardware codes
+
+Parsed from glasses serial number (`S100 LAA` etc.):
+
+| Code | Meaning |
+|------|---------|
+| `S100` | Round frame (G1A) |
+| `S110` | Square frame (G1B) |
+| `LAA` | Grey |
+| `LBB` | Brown |
+| `LCC` | Green |
+
+---
+
+## What COGOS currently ignores
+
+Things the firmware reports that we don't yet use:
+
+- **Battery events** (`0xF5 0x09`/`0x0A`) — glasses battery %, charging state
+- **Case events** (`0xF5 0x08`/`0x0B`/`0x0E`/`0x0F`) — lid state, case battery, case charging
+- **Binding success** (`0xF5 0x11`) — BLE bind ack
+- **Wear state** (`0xF5 0x06`/`0x07`) — could drive auto-show/hide of HUD
+- **Dashboard show/close** (`0xF5 0x1E`/`0x1F`) — distinct from generic double-tap
+- **Debug log stream** (`0xF4`) — full-text firmware logs
+
+Things the firmware can do that COGOS currently does phone-side:
+
+- Dashboard panes (time/weather/calendar/stocks/news/map) — the
+  firmware-dashboard migration plan is retiring our bitmap in favor of
+  these native panes
+- Notifications — partially used via the whitelist + `0x4B`
+- Calendar — firmware can display 8 events natively; current glance shows 3

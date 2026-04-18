@@ -1,8 +1,12 @@
 # Firmware Alignment — Implementation Plan
 
-Companion to `docs/superpowers/specs/2026-04-16-firmware-aligned-refactors.md`.
-That doc identifies *what* to refactor; this doc is *how*, split into "do now"
-and "plan together".
+Seven firmware-alignment opportunities identified after reverse-engineering
+the G1 BLE protocol via Gadgetbridge and MentraOS (see
+`docs/G1_PROTOCOL_REFERENCE.md`). Each item below is a *big* refactor — not a
+bug or simplification — shifting work from the phone to firmware.
+
+Status tracker: "do now" items carry checkbox state; "plan together" items
+capture open decisions.
 
 ---
 
