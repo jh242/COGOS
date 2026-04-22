@@ -41,7 +41,7 @@ final class TransitSource: ContextProvider {
         }
         lastFetch = ctx.now
 
-        guard let userLoc = ctx.userLocation else {
+        guard let userLoc = location.lastKnownLocation() else {
             trace("no user location — skipping")
             return
         }

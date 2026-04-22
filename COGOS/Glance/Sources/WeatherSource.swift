@@ -28,9 +28,7 @@ final class WeatherSource {
         if let last = lastFetch, ctx.now.timeIntervalSince(last) < Self.refreshInterval {
             return
         }
-        var loc = ctx.userLocation
-        if loc == nil { loc = await location.requestLocation() }
-        guard let loc = loc else {
+        guard let loc = location.lastKnownLocation() else {
             trace("no user location — skipping")
             return
         }
@@ -41,7 +39,7 @@ final class WeatherSource {
             let celsius = current.temperature.converted(to: .celsius).value
             let clamped = max(Double(Int8.min), min(Double(Int8.max), celsius.rounded()))
             currentInfo = WeatherInfo(
-                icon: Self.weatherId(for: current.condition),
+                icon: Self.weatherId(for: current.condition, isDaylight: current.isDaylight),
                 temperatureCelsius: Int8(clamped),
                 displayFahrenheit: false,
                 hour24: true
@@ -56,9 +54,9 @@ final class WeatherSource {
     private func trace(_ msg: String) { print("[weather] \(msg)") }
 
     /// Map WeatherKit's `WeatherCondition` to the firmware icon set.
-    static func weatherId(for condition: WeatherCondition) -> WeatherId {
+    static func weatherId(for condition: WeatherCondition, isDaylight: Bool) -> WeatherId {
         switch condition {
-        case .clear, .mostlyClear, .hot: return .sunny
+        case .clear, .mostlyClear, .hot: return isDaylight ? .sunny : .night
         case .cloudy, .mostlyCloudy, .partlyCloudy, .smoky: return .clouds
         case .drizzle: return .drizzle
         case .rain, .sunShowers: return .rain

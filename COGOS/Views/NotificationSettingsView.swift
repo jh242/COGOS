@@ -28,15 +28,15 @@ struct NotificationSettingsView: View {
             }
             HStack {
                 TextField("com.example.app", text: $newAppId).padding(.horizontal, 12)
-                    .frame(height: 44).background(Color.white.cornerRadius(5))
+                    .frame(height: 44).background(Color(.secondarySystemBackground).cornerRadius(5))
                 Button("Add") { add() }
-                    .padding(.horizontal, 16).frame(height: 44).background(Color.white.cornerRadius(5))
+                    .padding(.horizontal, 16).frame(height: 44).background(Color(.secondarySystemBackground).cornerRadius(5))
                     .buttonStyle(.plain)
             }
             Button("Push whitelist to glasses") {
                 Task { await whitelist.pushToGlasses(proto: appState.proto) }
             }
-            .frame(maxWidth: .infinity).frame(height: 44).background(Color.white.cornerRadius(5))
+            .frame(maxWidth: .infinity).frame(height: 44).background(Color(.secondarySystemBackground).cornerRadius(5))
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 44)

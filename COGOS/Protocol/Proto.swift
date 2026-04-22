@@ -4,7 +4,7 @@ import Foundation
 /// Ports `lib/services/proto.dart`.
 actor Proto {
     private let queue: BleRequestQueue
-    private var evenaiSeq: Int = 0
+    private var textSeq: UInt8 = 0
     private var dashboardSeq: UInt8 = 0
 
     init(queue: BleRequestQueue) {
@@ -32,24 +32,48 @@ actor Proto {
         return (ret?.data.count ?? 0) >= 2 && ret?.data[1] == 0xc9
     }
 
-    // MARK: - Even AI data transport
+    // MARK: - Even AI data transport (0x54 streaming)
 
-    /// Send AI result / text page. Uses 0x4E multi-packet assembler.
+    /// Emit a 0x54 prepare packet — sent once per reply, before any text
+    /// updates. Reserves + returns the seq used for this message's
+    /// subsequent text packets.
     @discardableResult
-    func sendEvenAIData(_ text: String, newScreen: Int, pos: Int,
-                        currentPageNum: Int, maxPageNum: Int, timeoutMs: Int = 2000) async -> Bool {
-        let data = Data(text.utf8)
-        let syncSeq = evenaiSeq & 0xff
-        let packets = EvenAIProto.multiPackListV2(
-            cmd: 0x4E, data: data, syncSeq: syncSeq, newScreen: newScreen,
-            pos: pos, currentPageNum: currentPageNum, maxPageNum: maxPageNum
-        )
-        evenaiSeq += 1
+    func sendEvenAITextPrepare(timeoutMs: Int = 1500) async -> UInt8 {
+        let seq = textSeq
+        textSeq = textSeq &+ 1
+        let pack = EvenAIText54.preparePacket(seq: seq)
+        _ = await queue.request(pack, lr: "L", timeoutMs: timeoutMs)
+        _ = await queue.request(pack, lr: "R", timeoutMs: timeoutMs)
+        return seq
+    }
 
-        let okL = await queue.requestList(packets, lr: "L", timeoutMs: timeoutMs)
-        if !okL { return false }
-        let okR = await queue.requestList(packets, lr: "R", timeoutMs: timeoutMs)
-        return okR
+    /// Send a cumulative text update. `text` should contain the full answer
+    /// assembled so far — firmware replaces its buffer and paginates.
+    /// Consumes one seq; chunks share it.
+    @discardableResult
+    func sendEvenAIText(_ text: String, timeoutMs: Int = 2000) async -> Bool {
+        await sendEvenAIText54(text, status: .streaming, timeoutMs: timeoutMs)
+    }
+
+    /// Final re-send of the full answer with the "complete" status byte
+    /// (0x64). Without this, firmware stays in streaming mode and single-tap
+    /// page scroll is a no-op. See the `HeldLeftBar_AI_MultiLineWithScroll`
+    /// capture: byte 11 flips `0xFF → 0x64` exactly once, after the last
+    /// streaming chunk, to hand the text off to the scrollable viewer.
+    @discardableResult
+    func sendEvenAITextComplete(_ text: String, timeoutMs: Int = 2000) async -> Bool {
+        await sendEvenAIText54(text, status: .complete, timeoutMs: timeoutMs)
+    }
+
+    private func sendEvenAIText54(_ text: String, status: EvenAIText54.Status, timeoutMs: Int) async -> Bool {
+        let seq = textSeq
+        textSeq = textSeq &+ 1
+        let packets = EvenAIText54.textPackets(seq: seq, text: text, status: status)
+        for pack in packets {
+            if await queue.request(pack, lr: "L", timeoutMs: timeoutMs) == nil { return false }
+            if await queue.request(pack, lr: "R", timeoutMs: timeoutMs) == nil { return false }
+        }
+        return true
     }
 
     // MARK: - Settings / control
@@ -58,6 +82,14 @@ actor Proto {
     func setHeadUpAngle(_ angle: Int) async {
         let clamped = UInt8(max(0, min(60, angle)))
         let data = Data([0x0B, clamped, 0x01])
+        _ = await queue.sendBoth(data)
+    }
+
+    /// Display brightness. Level 0..0x2A (0..42); `auto` toggles firmware
+    /// ambient-light tracking. See G1 reference `0x01 BRIGHTNESS_SET`.
+    func setBrightness(level: Int, auto: Bool) async {
+        let clamped = UInt8(max(0, min(0x2A, level)))
+        let data = Data([0x01, clamped, auto ? 0x01 : 0x00])
         _ = await queue.sendBoth(data)
     }
 

@@ -1,23 +1,26 @@
 import Foundation
 
 /// Fallback provider — shows cached headlines when nothing higher-priority
-/// is eligible. Because every other provider compact-filters out when idle,
-/// News naturally fills a bottom slot once its cache is populated.
+/// is eligible. Each headline is truncated to its first few words and joined
+/// with a middle-dot separator, so a full row of topline news fits the
+/// waveguide's narrow line budget.
 final class NewsSource: ContextProvider {
     let name = "news"
     let priority = 3
 
     private static let refreshInterval: TimeInterval = 30 * 60
+    private static let separator = " · "
+    private static let maxHeadlines = 4
+    private static let wordsPerHeadline = 3
 
     var topic: String = "BUSINESS"
 
     private var lastFetch: Date?
-    private var cachedHeadlines: [String] = []
+    private var displayBody: String = ""
 
     var currentNote: QuickNote? {
-        guard !cachedHeadlines.isEmpty else { return nil }
-        let body = cachedHeadlines.prefix(3).joined(separator: "\n")
-        return QuickNote(title: "News", body: body)
+        guard !displayBody.isEmpty else { return nil }
+        return QuickNote(title: "News", body: displayBody)
     }
 
     func refresh(_ ctx: GlanceContext) async {
@@ -49,8 +52,14 @@ final class NewsSource: ContextProvider {
             trace("RSS parsed 0 titles")
             return
         }
-        cachedHeadlines = titles.prefix(5).map { cleanTitle($0) }
-        trace("RSS → \(cachedHeadlines.count) headlines")
+        let shortened = titles.prefix(Self.maxHeadlines).map { shorten(cleanTitle($0)) }
+        displayBody = shortened.filter { !$0.isEmpty }.joined(separator: Self.separator)
+        trace("RSS → \(shortened.count) headlines → \"\(displayBody)\"")
+    }
+
+    private func shorten(_ headline: String) -> String {
+        let words = headline.split(whereSeparator: \.isWhitespace).prefix(Self.wordsPerHeadline)
+        return words.joined(separator: " ")
     }
 
     private func cleanTitle(_ raw: String) -> String {
@@ -60,6 +69,8 @@ final class NewsSource: ContextProvider {
         }
         return trimmed
     }
+
+    private func trace(_ msg: String) { print("[news] \(msg)") }
 }
 
 /// Minimal XMLParserDelegate that collects the text of <title> elements nested inside <item>.

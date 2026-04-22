@@ -1,6 +1,6 @@
 # COGOS (Swift)
 
-Pure-Swift / SwiftUI port of the COGOS app. iOS-only. Targets iOS 18+.
+Pure-Swift / SwiftUI port of the COGOS app. iOS-only. Targets iOS 26+.
 
 ## Xcode project setup
 
@@ -20,9 +20,9 @@ edit `project.yml` and re-run `xcodegen generate`.
 
 ## API keys
 
-Either enter them in the in-app Settings screen (they persist to
-`UserDefaults`), or export `ANTHROPIC_API_KEY` as an environment variable in
-the Xcode scheme.
+Either enter them in the in-app Settings screen (persisted to `UserDefaults`
+under `llm_api_key`), or export `LLM_API_KEY` in the Xcode scheme. Base URL
+(default `https://api.openai.com/v1/`) and model are also configurable.
 
 ## Project layout
 
@@ -30,10 +30,10 @@ the Xcode scheme.
 COGOS/
 ├── App/               SwiftUI App, root state, ContentView
 ├── BLE/               BluetoothManager, BleRequestQueue, GestureRouter, UUIDs
-├── Protocol/          Proto, EvenAIProto, DashboardProto, QuickNoteProto, CRC32XZ
-├── Session/           EvenAISession, SpeechStreamRecognizer, TextPaginator,
+├── Protocol/          Proto, EvenAIText54, DashboardProto, QuickNoteProto, CRC32XZ
+├── Session/           EvenAISession, SpeechStreamRecognizer,
 │                      ClaudeSession, PcmConverter, LC3 codec
-├── API/               AnthropicClient, CoworkRelayClient, SSEParser
+├── API/               ChatCompletionsClient, SSEParser
 ├── Glance/            GlanceService + Sources/
 ├── Platform/          NativeLocation, Settings, NotificationWhitelist
 ├── Models/            EvenaiModel, HistoryStore, NotifyModel

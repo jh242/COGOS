@@ -26,14 +26,29 @@
 	<true/>
 	<key>MinimumOSVersion</key>
 	<string>14.0</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app uses your location to show nearby contextual info on your glasses.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>This app reads your calendar to show upcoming events on your glasses.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>jh-workstation</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>This app needs Bluetooth access to connect to your smart glasses.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>This app needs Bluetooth access to connect to your smart glasses.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app reads your calendar to show upcoming events on your glasses.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>COGOS needs background location so weather and nearby transit keep updating on your glasses while your phone is in your pocket.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app uses your location to show nearby contextual info on your glasses.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>The app needs the microphone for speech recognition.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
@@ -43,6 +58,9 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
+		<string>location</string>
+		<string>fetch</string>
+		<string>processing</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

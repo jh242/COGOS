@@ -1,8 +1,12 @@
 import Foundation
 import Combine
 
-/// Session orchestrator: mic on/off, STT, silence detect, Claude stream, pagination, glasses display.
-/// Ports `lib/services/evenai.dart`.
+/// Session orchestrator: mic on/off, STT, silence detect, LLM stream,
+/// glasses display.
+///
+/// Display path uses the firmware-native 0x54 streaming TEXT command —
+/// phone emits a `prepare` packet at the start of a reply, then cumulative
+/// text updates as tokens arrive. Firmware owns pagination and scroll.
 @MainActor
 final class EvenAISession: ObservableObject {
     // MARK: - Published
@@ -28,19 +32,12 @@ final class EvenAISession: ObservableObject {
     private var silenceTask: Task<Void, Never>?
     private var recordingTimeoutTask: Task<Void, Never>?
     private var sttTask: Task<Void, Never>?
-    private var pagingTimerTask: Task<Void, Never>?
-
-    // Pagination state
-    private var currentLine: Int = 0
-    private var lines: [String] = []
-    private var isManual = false
 
     private var lastStartMs: Int = 0
     private var lastStopMs: Int = 0
     private let startTimeGap = 500
     private let stopTimeGap = 500
     private let maxRecordingDuration = 30
-    private static let maxRetry = 10
 
     init(proto: Proto, speech: SpeechStreamRecognizer, settings: Settings) {
         self.proto = proto
@@ -62,7 +59,6 @@ final class EvenAISession: ObservableObject {
         clear()
         isReceivingAudio = true
         isRunning = true
-        currentLine = 0
         isSyncing = true
 
         _ = await proto.micOn(lr: "R")
@@ -131,24 +127,24 @@ final class EvenAISession: ObservableObject {
         if combinedText.isEmpty {
             dynamicText = "No Speech Recognized"
             isSyncing = false
-            await startSendReply("No Speech Recognized")
+            await pushReply("No Speech Recognized")
             return
         }
 
         let query = combinedText
         var fullAnswer = ""
 
-        if let client = settings.makeAnthropicClient() {
-            do {
-                fullAnswer = try await collect(stream: client.stream(message: query, session: session))
-            } catch {
-                isSyncing = false
-                await startSendReply("API error: \(error.localizedDescription)")
-                return
-            }
-        } else {
+        guard let client = settings.makeChatClient() else {
             isSyncing = false
-            await startSendReply("No API key set. Add key in Settings.")
+            await pushReply("No API key set. Add key in Settings.")
+            return
+        }
+
+        do {
+            fullAnswer = try await streamAndDisplay(client.stream(message: query, session: session))
+        } catch {
+            isSyncing = false
+            await pushReply("API error: \(error.localizedDescription)")
             return
         }
 
@@ -161,111 +157,71 @@ final class EvenAISession: ObservableObject {
         dynamicText = "\(query)\n\n\(fullAnswer)"
     }
 
-    private func collect(stream: AsyncThrowingStream<String, Error>) async throws -> String {
-        var acc = ""
-        await sendHudText("Thinking...")
-        for try await chunk in stream {
-            if !isRunning { break }
-            acc.append(chunk)
-        }
-        await startSendReply(acc)
-        return acc
-    }
+    // MARK: - Streaming display
 
-    // MARK: - Display / Pagination
+    /// Prepare + cumulative 0x54 updates. Firmware owns pagination, so we
+    /// just feed it the full answer-so-far on every tick. Backpressure is
+    /// natural: each `sendEvenAIText` awaits L+R C9 before returning.
+    private func streamAndDisplay(_ stream: AsyncThrowingStream<String, Error>) async throws -> String {
+        _ = await proto.sendEvenAITextPrepare()
+        _ = await proto.sendEvenAIText(format("Thinking"))
 
-    private func sendHudText(_ text: String) async {
-        let l = TextPaginator.measureStringList(text)
-        let first5 = Array(l.prefix(5))
-        let screen = first5.map { $0 + "\n" }.joined()
-        await sendReply(screen, type: 0x01, status: 0x70, pos: 0)
-    }
-
-    func startSendReply(_ text: String) async {
-        currentLine = 0
-        lines = TextPaginator.measureStringList(text)
-        if lines.isEmpty { return }
-
-        if lines.count <= 5 {
-            let pad = Array(repeating: " \n", count: 5 - lines.count)
-            let content = lines.map { $0 + "\n" }
-            let screen = (pad + content).joined()
-            _ = await sendReply(screen, type: 0x01, status: 0x30, pos: 0)
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            if isManual { return }
-            _ = await sendReply(screen, type: 0x01, status: 0x40, pos: 0)
-            return
-        }
-
-        let firstScreen = lines.prefix(5).map { $0 + "\n" }.joined()
-        if await sendReply(firstScreen, type: 0x01, status: 0x30, pos: 0) {
-            currentLine = 0
-            startPagingTimer()
-        } else {
-            clear()
-        }
-    }
-
-    private func startPagingTimer() {
-        pagingTimerTask?.cancel()
-        pagingTimerTask = Task { [weak self] in
+        let keepalive = Task { [proto] in
+            let frames = ["Thinking.", "Thinking..", "Thinking..."]
+            var i = 0
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                guard let self = self else { return }
-                if self.isManual { return }
-                self.currentLine = min(self.currentLine + 5, self.lines.count - 1)
-                let tail = Array(self.lines[self.currentLine...])
-                if self.currentLine > self.lines.count - 1 { return }
-                let take = min(5, tail.count)
-                let merged = tail.prefix(take).map { $0 + "\n" }.joined()
-                if self.currentLine >= self.lines.count - 5 {
-                    _ = await self.sendReply(merged, type: 0x01, status: 0x40, pos: 0)
-                    return
-                } else {
-                    _ = await self.sendReply(merged, type: 0x01, status: 0x30, pos: 0)
-                }
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                if Task.isCancelled { return }
+                _ = await proto.sendEvenAIText("\n\n" + frames[i % frames.count])
+                i += 1
             }
         }
-    }
 
-    func nextPageByTouchpad() {
-        guard isRunning else { return }
-        isManual = true
-        pagingTimerTask?.cancel(); pagingTimerTask = nil
-        if totalPages() < 2 { Task { await manualForJustOnePage() }; return }
-        if currentLine + 5 > lines.count - 1 { return }
-        currentLine += 5
-        Task { await updateManual() }
-    }
-
-    func lastPageByTouchpad() {
-        guard isRunning else { return }
-        isManual = true
-        pagingTimerTask?.cancel(); pagingTimerTask = nil
-        if totalPages() < 2 { Task { await manualForJustOnePage() }; return }
-        currentLine = max(0, currentLine - 5)
-        Task { await updateManual() }
-    }
-
-    private func updateManual() async {
-        guard currentLine >= 0, currentLine <= lines.count - 1 else { return }
-        let tail = Array(lines[currentLine...])
-        let take = min(5, tail.count)
-        let merged = tail.prefix(take).map { $0 + "\n" }.joined()
-        _ = await sendReply(merged, type: 0x01, status: 0x50, pos: 0)
-    }
-
-    private func manualForJustOnePage() async {
-        if lines.count <= 5 {
-            let pad = Array(repeating: " \n", count: 5 - lines.count)
-            let content = lines.map { $0 + "\n" }
-            _ = await sendReply((pad + content).joined(), type: 0x01, status: 0x50, pos: 0)
+        var accumulated = ""
+        var lastSent = ""
+        do {
+            for try await chunk in stream {
+                if !isRunning { break }
+                if keepalive.isCancelled == false { keepalive.cancel() }
+                accumulated += chunk
+                if accumulated != lastSent {
+                    _ = await proto.sendEvenAIText(format(accumulated))
+                    lastSent = accumulated
+                }
+            }
+        } catch {
+            keepalive.cancel()
+            throw error
         }
+        keepalive.cancel()
+        if accumulated != lastSent && isRunning {
+            _ = await proto.sendEvenAIText(format(accumulated))
+        }
+        // Flip firmware into scrollable mode: re-send the full answer with
+        // status=0x64. Without this, the display stays pinned to the last
+        // 3 lines and single-tap scroll does nothing.
+        if isRunning && !accumulated.isEmpty {
+            _ = await proto.sendEvenAITextComplete(format(accumulated))
+        }
+        return accumulated
     }
+
+    /// One-shot reply (errors, "no speech", reset messages). Uses the same
+    /// prepare+text pair so the firmware accepts it as a fresh message.
+    private func pushReply(_ text: String) async {
+        _ = await proto.sendEvenAITextPrepare()
+        _ = await proto.sendEvenAIText(format(text))
+    }
+
+    /// Two leading newlines push the first line below the dashboard header,
+    /// matching the official app's framing. Trailing newline mirrors the
+    /// Even app's per-update terminator — without it, firmware renders the
+    /// first ~3 lines and stops advancing the viewport as new tokens arrive.
+    private func format(_ text: String) -> String { "\n\n\(text)\n" }
 
     func resetSession() {
         session.reset()
-        Task { await startSendReply("Session reset") }
+        Task { await pushReply("Session reset") }
     }
 
     func stopEvenAIByOS() async {
@@ -281,44 +237,7 @@ final class EvenAISession: ObservableObject {
     func clear() {
         isReceivingAudio = false
         isRunning = false
-        isManual = false
-        currentLine = 0
-        lines = []
         recordingTimeoutTask?.cancel(); recordingTimeoutTask = nil
-        pagingTimerTask?.cancel(); pagingTimerTask = nil
         silenceTask?.cancel(); silenceTask = nil
-        retryCount = 0
-    }
-
-    // MARK: - Send helper with retry
-
-    private var retryCount = 0
-    @discardableResult
-    private func sendReply(_ text: String, type: Int, status: Int, pos: Int) async -> Bool {
-        guard isRunning else { return false }
-        let newScreen = status | type
-        let ok = await proto.sendEvenAIData(text, newScreen: newScreen, pos: pos,
-                                             currentPageNum: currentPage(), maxPageNum: totalPages())
-        if !ok {
-            if retryCount < Self.maxRetry {
-                retryCount += 1
-                return await sendReply(text, type: type, status: status, pos: pos)
-            }
-            retryCount = 0
-            return false
-        }
-        retryCount = 0
-        return true
-    }
-
-    // MARK: - Pagination math
-
-    func totalPages() -> Int {
-        if lines.isEmpty { return 0 }
-        return (lines.count + 4) / 5
-    }
-
-    func currentPage() -> Int {
-        return (currentLine / 5) + 1
     }
 }

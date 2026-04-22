@@ -75,6 +75,12 @@ final class AppState: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Prompt for location on first launch — Always is essential for the
+        // all-day wearable use case.
+        if location.checkPermission() == .notDetermined {
+            location.requestPermission()
+        }
+
         // Attempt auto-reconnect on launch.
         Task { await bluetooth.tryReconnectLastDevice() }
     }
@@ -82,6 +88,7 @@ final class AppState: ObservableObject {
     private func handleConnectionStateChange(_ state: BluetoothManager.ConnectionState) {
         switch state {
         case .connected:
+            location.startUpdates()
             glance.startTimer()
             Task {
                 await whitelist.pushToGlasses(proto: proto)
@@ -92,6 +99,7 @@ final class AppState: ObservableObject {
             }
         case .disconnected, .scanning, .connecting:
             glance.stopTimer()
+            location.stopUpdates()
         }
     }
 

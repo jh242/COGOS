@@ -7,12 +7,13 @@ This file gives Claude Code the context it needs to work effectively in this rep
 ## What this project is
 
 An **iOS-only** Swift / SwiftUI app that turns **Even Realities G1 smart
-glasses** into a wearable Claude terminal. The phone connects to the glasses
+glasses** into a wearable AI terminal. The phone connects to the glasses
 over dual BLE (one connection per arm), streams LC3 audio from the glasses
-microphone, transcribes speech via the native iOS Speech framework, calls the
-Claude API, and renders the reply on the glasses waveguide display.
+microphone, transcribes speech via the native iOS Speech framework, calls an
+OpenAI-compatible Chat Completions endpoint, and streams the reply to the
+glasses waveguide display using the firmware-native 0x54 TEXT command.
 
-Pure Swift / SwiftUI. iOS 18+. Bundle ID: `com.jackhu.cogos`.
+Pure Swift / SwiftUI. iOS 26+. Bundle ID: `com.jackhu.cogos`.
 
 ---
 
@@ -20,7 +21,7 @@ Pure Swift / SwiftUI. iOS 18+. Bundle ID: `com.jackhu.cogos`.
 
 | Layer | Technology |
 |-------|-----------|
-| App framework | Swift / SwiftUI (iOS 14+) |
+| App framework | Swift / SwiftUI (iOS 26+) |
 | State management | `@MainActor` ObservableObject + `@Published` + `@EnvironmentObject` |
 | Concurrency | Swift actors, async/await, AsyncStream, CheckedContinuation |
 | Event bus | Combine `PassthroughSubject` |
@@ -28,8 +29,7 @@ Pure Swift / SwiftUI. iOS 18+. Bundle ID: `com.jackhu.cogos`.
 | Speech-to-text | Apple Speech framework (`SFSpeechRecognizer`, on-device) |
 | Audio format | LC3 codec (C sources under `COGOS/Session/lc3/`) |
 | HTTP client | `URLSession` |
-| AI backend | Anthropic Claude API (`api.anthropic.com/v1/messages`) |
-| Local AI sessions | Claude Code CLI (`claude --print`) via Node.js relay server |
+| AI backend | OpenAI-compatible Chat Completions (user-configured base URL) |
 
 ---
 
@@ -39,17 +39,16 @@ Pure Swift / SwiftUI. iOS 18+. Bundle ID: `com.jackhu.cogos`.
 COGOS/
   App/               SwiftUI @main, AppState, ContentView
   BLE/               BluetoothManager, BleRequestQueue, GestureRouter, UUIDs
-  Protocol/          Proto, EvenAIProto, DashboardProto, QuickNoteProto, CRC32XZ
-  Session/           EvenAISession, SpeechStreamRecognizer, TextPaginator,
+  Protocol/          Proto, EvenAIText54, DashboardProto, QuickNoteProto, CRC32XZ
+  Session/           EvenAISession, SpeechStreamRecognizer,
                      PcmConverter, LC3 codec (C)
-  API/               AnthropicClient, HaikuClient, CoworkRelayClient, SSEParser
+  API/               ChatCompletionsClient, SSEParser
   Glance/            GlanceService + Sources/ (location, calendar, weather,
                      news, transit, notifications)
   Platform/          NativeLocation, Settings, NotificationWhitelist
   Models/            EvenaiModel, HistoryStore
   Views/             HomeView, HistoryView, SettingsView, BleProbeView, …
   Supporting/        Info.plist, COGOS-Bridging-Header.h
-tools/relay/         Node.js Claude Code relay server
 docs/                Design docs
 ```
 
@@ -68,9 +67,9 @@ Send to L first; only send to R after L acknowledges with `0xC9`.
 |-----------|---------|---------|
 | App → Glasses | `0x0E 0x01` | Enable right mic |
 | App → Glasses | `0x0E 0x00` | Disable mic |
-| App → Glasses | `0x4E ...` | Send AI result / text page |
+| App → Glasses | `0x54 ... 02 ...` | AI text: prepare (one per reply) |
+| App → Glasses | `0x54 ... 03 ...` | AI text: cumulative update (chunked) |
 | App → Glasses | `0x25 ...` | Heartbeat (every 8s) |
-| App → Glasses | `0x15/0x20/0x16` | BMP upload / finish / CRC |
 | App → Glasses | `0x04 ...` | Notification whitelist JSON |
 | App → Glasses | `0x4B ...` | Notify push |
 | App → Glasses | `0x18` | Exit to dashboard |
@@ -78,31 +77,42 @@ Send to L first; only send to R after L acknowledges with `0xC9`.
 | Glasses → App | `0xF1 seq data` | LC3 audio chunk |
 | Glasses → App | `0xF5 0x17` | Long-press: start Even AI |
 | Glasses → App | `0xF5 0x18` | Stop recording |
-| Glasses → App | `0xF5 0x01` | Single tap (page turn) |
+| Glasses → App | `0xF5 0x01` | Single tap (firmware paginates; ignore) |
 | Glasses → App | `0xF5 0x02` | Head-up |
 | Glasses → App | `0xF5 0x04/05` | Triple tap (mode cycle) |
 | Glasses → App | `0xF5 0x20` | Double-tap exit |
 
-### Display constraints
-- Max width: **488 px**
-- Font size: **21 px**
-- Lines per screen: **5**
-- Text is paginated by `TextPaginator` using
-  `NSAttributedString.size(withAttributes:)` — not a naive character count.
+### 0x54 TEXT streaming (firmware-native)
 
-### 0x4E packet `newscreen` byte
-
+12-byte header followed by UTF-8 text (text packets only):
 ```
-upper 4 bits — status:
-  0x30  Even AI displaying (auto mode)
-  0x40  Even AI display complete (last page, auto)
-  0x50  Even AI manual mode
-  0x60  Network error
-  0x70  Text show
-
-lower 4 bits — action:
-  0x01  Display new content
+0:  0x54
+1:  total length (header + payload)
+2:  0x00
+3:  seq (per logical message; all chunks share it)
+4:  sub  — 0x02 prepare, 0x03 text
+5:  chunk_count
+6:  0x00
+7:  chunk_index (1-based)
+8:  0x00
+9:  scroll flag — 0x00 during streaming + initial "done" re-send;
+                 0x01 on phone-driven scroll-position updates (post-done)
+10: 0x00
+11: status byte —
+      prepare:   0x00
+      streaming: 0xFF (firmware pins viewport to the bottom)
+      complete:  0x64 (100; final re-send — this is what enables the
+                 firmware's native single-tap scroll viewer; without it
+                 the display stays locked to the last 3 lines)
+      0x00..0x64 scroll-position percentage when byte 9 = 0x01
+12+: UTF-8 (sub=0x03 only)
 ```
+
+Each reply: one prepare, then cumulative text updates (every update carries
+the full answer so far, status=0xFF). After the last streaming update, send
+one more cumulative update with status=0x64 — firmware then hands the text
+to its scrollable viewer and single-tap scroll starts working.
+Max payload per chunk: 100 bytes. ACK: `54 0A 00 <seq> <sub> <count> 00 <idx> 00 C9`.
 
 ---
 
@@ -117,41 +127,29 @@ lower 4 bits — action:
 [Release]       → 0xF5 0x18
   → recordOverByOS()
      → proto.micOff()
-     → strip wake word from transcript
-     → try CoworkRelayClient (if cowork mode + relay configured)
-     → fall back to AnthropicClient on RelayError.offline
-     → TextPaginator → startSendReply() via 0x4E pages
+     → settings.makeChatClient().stream(...)
+     → proto.sendEvenAITextPrepare() then cumulative proto.sendEvenAIText(...)
 [Double-tap]    → 0xF5 0x20 → appState.exitAll() + session.clear()
 ```
 
 ---
 
-## Anthropic API (AnthropicClient.swift)
+## LLM API (ChatCompletionsClient.swift)
 
-`POST https://api.anthropic.com/v1/messages`
+Backend-agnostic. `OpenAICompatibleClient` hits any OpenAI-compatible
+`POST {baseURL}/chat/completions` endpoint with `stream: true`. Base URL,
+model, and API key live in `Settings` (UserDefaults keys `llm_base_url`,
+`llm_model`, `llm_api_key`). Env override: `LLM_API_KEY`.
 
-Headers:
-```
-x-api-key: <ANTHROPIC_API_KEY>
-anthropic-version: 2023-06-01
-content-type: application/json
-```
-
-Models: `claude-sonnet-4-6` (main), `claude-haiku-4-5-20251001` (glance ranking).
-Uses `URLSession.bytes(for:)` on iOS 15+, falls back to `data(for:)` on iOS 14.
-SSE parsed by `SSEParser.swift`.
+SSE parsed by `SSEParser.swift`; client extracts `choices[0].delta.content`.
 
 ---
 
 ## Session modes
 
-| Mode | Trigger | System prompt focus | History |
-|------|---------|---------------------|---------|
-| `chat` | default | Concise general answers | Per-session |
-| `code` | triple-tap L | Expert programmer, plain text code | Per-session |
-| `cowork` | triple-tap R | Pair-programming, persistent context | Persisted |
-
-Mode is shown in every page header: `[CHAT]`, `[CODE]`, `[WORK]`.
+Three modes exist in `SessionMode.swift` (`chat`, `code`), triggered by
+triple-tap gestures. System-prompt differentiation per mode is not yet
+implemented — the base client uses a single concise-answer prompt.
 
 ---
 
@@ -163,32 +161,18 @@ Mode is shown in every page header: `[CHAT]`, `[CODE]`, `[WORK]`.
 
 ---
 
-## Cowork relay (Claude Code integration)
-
-For `cowork` mode the app optionally delegates to a local relay that spawns
-`claude --print` CLI processes.
-
-```
-iOS app  ──POST /query──►  relay (localhost:9090)
-                            └─ claude --print "<msg>"
-                            ◄── streamed SSE response
-```
-
-Relay lives in `tools/relay/server.js`. If unreachable, falls through to the
-direct Anthropic API.
-
----
-
 ## Conventions and gotchas
 
-- Always send L before R. Use `BleRequestQueue.sendBoth(_:)`.
-- `Proto.sendEvenAIData(...)` assembles 0x4E packets — don't hand-roll.
-- `TextPaginator` runs on `@MainActor` because it touches UIKit text metrics.
+- Always send L before R. `BleRequestQueue.sendBoth(_:)` handles it; `Proto`
+  streaming methods send L→R per chunk serially.
+- `Proto.sendEvenAITextPrepare()` + `Proto.sendEvenAIText(_:)` — don't
+  hand-roll 0x54 headers; use `EvenAIText54` encoder.
+- Each AI reply is one prepare + N cumulative text updates. Firmware owns
+  pagination; phone never splits into pages.
 - Actor isolation: `Proto` and `BleRequestQueue` are actors; call with `await`.
 - `EvenAISession.clear()` resets all state — call on every exit path.
-- Retry loops in `sendEvenAIReply` are intentional; don't remove them.
-- API keys live in `UserDefaults` via `Settings.swift` or Xcode scheme env;
-  never commit them.
+- API keys live in `UserDefaults` via `Settings.swift` or Xcode scheme env
+  (`LLM_API_KEY`); never commit them.
 
 ---
 
@@ -200,21 +184,12 @@ create one in Xcode, drag in `COGOS/`, set the bridging header
 `COGOS/Supporting/Info.plist`, and enable Background Modes → Uses Bluetooth
 LE accessories. Requires a physical iOS device (BLE cannot be simulated).
 
-## Running the cowork relay
-
-```bash
-cd tools/relay
-npm install
-ANTHROPIC_API_KEY=sk-ant-... node server.js
-```
-
----
-
 ## Key files to read before making changes
 
 1. `COGOS/Session/EvenAISession.swift` — session orchestrator
 2. `COGOS/BLE/BluetoothManager.swift` — dual-BLE transport + packet bus
 3. `COGOS/BLE/BleRequestQueue.swift` — request/response + sendBoth sequencing
 4. `COGOS/Protocol/Proto.swift` — command helpers, packet assemblers
-5. `COGOS/Protocol/EvenAIProto.swift` — 0x4E multi-packet format
-6. `COGOS/App/AppState.swift` — top-level wiring
+5. `COGOS/Protocol/EvenAIText54.swift` — 0x54 streaming text encoder
+6. `COGOS/API/ChatCompletionsClient.swift` — OpenAI-compatible LLM abstraction
+7. `COGOS/App/AppState.swift` — top-level wiring

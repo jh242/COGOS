@@ -2,7 +2,7 @@ name: COGOS
 options:
   bundleIdPrefix: com.jackhu
   deploymentTarget:
-    iOS: "18.0"
+    iOS: "26.0"
   xcodeVersion: "16.0"
   generateEmptyDirectories: false
 

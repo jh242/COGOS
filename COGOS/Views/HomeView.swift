@@ -12,7 +12,7 @@ struct HomeView: View {
                 }
             }) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 5).fill(Color.white)
+                    RoundedRectangle(cornerRadius: 5).fill(Color(.secondarySystemBackground))
                     Text(bluetooth.status).font(.system(size: 16)).foregroundColor(.primary)
                 }.frame(height: 100)
             }
@@ -34,12 +34,12 @@ struct HomeView: View {
                                 Text(session.dynamicText)
                                     .font(.system(size: 14))
                                     .multilineTextAlignment(.center)
-                                    .foregroundColor(bluetooth.isConnected ? .black : .gray)
+                                    .foregroundColor(bluetooth.isConnected ? .primary : .gray)
                                     .padding(16)
                             }
                         }
                     }
-                    .background(Color.white.cornerRadius(5))
+                    .background(Color(.secondarySystemBackground).cornerRadius(5))
                 }
                 .buttonStyle(.plain)
             }
@@ -71,7 +71,7 @@ struct HomeView: View {
                             }
                             Spacer()
                         }.padding(16)
-                         .background(Color.white.cornerRadius(5))
+                         .background(Color(.secondarySystemBackground).cornerRadius(5))
                     }
                     .buttonStyle(.plain)
                 }

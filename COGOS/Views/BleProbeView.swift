@@ -57,7 +57,7 @@ struct BleProbeView: View {
                 sending = false
             }
         }
-        .frame(maxWidth: .infinity).frame(height: 44).background(Color.white.cornerRadius(5))
+        .frame(maxWidth: .infinity).frame(height: 44).background(Color(.secondarySystemBackground).cornerRadius(5))
         .buttonStyle(.plain)
     }
 
@@ -72,7 +72,7 @@ struct BleProbeView: View {
                 sending = false
             }
         }
-        .frame(maxWidth: .infinity).frame(height: 44).background(Color.white.cornerRadius(5))
+        .frame(maxWidth: .infinity).frame(height: 44).background(Color(.secondarySystemBackground).cornerRadius(5))
         .buttonStyle(.plain)
     }
 }

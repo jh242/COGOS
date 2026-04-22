@@ -63,12 +63,7 @@ final class GlanceService: ObservableObject {
         defer { isTicking = false }
 
         let now = Date()
-        if location.checkPermission() == .notDetermined {
-            location.requestPermission()
-        }
-        var userLoc = location.lastKnownLocation()
-        if userLoc == nil { userLoc = await location.requestLocation() }
-        let ctx = GlanceContext(now: now, userLocation: userLoc)
+        let ctx = GlanceContext(now: now)
 
         await weather.refresh(ctx)
         for p in providers {

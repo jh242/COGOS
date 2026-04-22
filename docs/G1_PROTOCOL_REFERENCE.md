@@ -142,9 +142,10 @@ Everything else in the [Command ID](#command-id-app--glasses) table is a top-lev
 | `0x4B` | `NOTIFICATION_SEND_CONTROL` | Push notify |
 | `0x4C` | `NOTIFICATION_CLEAR_CONTROL` | |
 | `0x4D` | `MTU_SET` | |
-| `0x4E` | `TEXT_SET` | AI result / text page |
+| `0x4E` | `TEXT_SET` | AI result / text page (legacy) |
 | `0x4F` | `NOTIFICATION_AUTO_DISPLAY_SET` | |
 | `0x50` | `UNKNOWN` | |
+| `0x54` | `TEXT_STREAM` | AI streaming text — supersedes `0x4E` in current Even app |
 | `0x58` | `DASHBOARD_CALENDAR_NEXT_UP_SET` | |
 
 ### Command status responses (Glasses → App)
@@ -222,6 +223,73 @@ Multi-packet text rendering for AI responses. The header byte's upper
 **Action (lower nibble):** `0x01` = display new content.
 
 **Display hard limits:** **488 px wide, 21 px font, 5 lines per screen.**
+
+---
+
+## Streaming text — `0x54` (AI streaming, supersedes `0x4E`)
+
+Current Even app's AI reply surface. One `prepare` packet opens a logical
+message, followed by cumulative `text` updates — each update carries the
+entire answer so far; firmware replaces its buffer on every write and
+paginates internally. A final `text` update with status byte `0x64` hands
+the buffer off to the scrollable viewer.
+
+**12-byte header (all packets):**
+
+```
+[0]  0x54
+[1]  total_length : u8         header + payload, ≤ 0x70 (112)
+[2]  0x00
+[3]  seq : u8                  unique per packet — prepare + each cumulative
+                               update each consume one seq; multi-chunk
+                               updates reuse the seq across their chunks
+[4]  sub : u8                  0x02 = prepare, 0x03 = text
+[5]  chunk_count : u8          total chunks in this update
+[6]  0x00
+[7]  chunk_index : u8          1-based
+[8]  0x00
+[9]  scroll_flag : u8          0x00 during streaming and the initial
+                               "done" re-send; 0x01 on phone-driven
+                               scroll-position updates after completion
+[10] 0x00
+[11] status : u8               see table below
+[12+] UTF-8 payload             sub = 0x03 only
+```
+
+**Status byte (`[11]`) state machine:**
+
+| Value | byte 9 | Meaning |
+|-------|--------|---------|
+| `0x00` | `0x00` | Prepare (sub = `0x02`, no payload) |
+| `0xFF` | `0x00` | Streaming — firmware pins viewport to the bottom |
+| `0x64` | `0x00` | **Complete** — final re-send of the full answer; flips firmware into the scrollable viewer. Without this packet the display stays locked to the last 3 lines |
+| `0x00..0x64` | `0x01` | Scroll-position percentage (phone-driven) — re-sends the same text with the viewport set to N % after a user tap. `0x00` = top, `0x64` = bottom |
+
+**Payload conventions:**
+
+- Leading `\n\n` pushes the first line below the dashboard header (matches
+  the official app's framing).
+- Trailing `\n` after every word during streaming — observed in captures;
+  firmware seems to treat it as a soft word-boundary marker.
+- Max payload per chunk is **100 bytes** (header is 12, total cap is 112).
+  Longer cumulative text is split across multiple chunks sharing a seq.
+
+**ACK:** glasses reply `54 0A 00 <seq> <sub> <count> 00 <idx> 00 C9`.
+`BleRequestQueue` matches on the first byte, so a generic reply is fine.
+
+**Typical send sequence for one reply:**
+
+```
+prepare           sub=02 status=00
+text streaming    sub=03 status=FF   (one per new token, cumulative)
+text complete     sub=03 status=64   (final, same full text)
+── firmware now allows single-tap scroll ──
+[optional] text scroll  sub=03 byte9=01 status=00..64   (phone-driven on tap)
+```
+
+Pinned 2026-04-21 via `PacketLogs/HeldLeftBar_AI_MultiLineWithScroll`
+capture — byte 11 flip `0xFF → 0x64` happens exactly once, after the last
+streaming chunk, immediately before scroll becomes available.
 
 ---
 
