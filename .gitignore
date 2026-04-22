@@ -1,50 +1,46 @@
-# Miscellaneous
-
-*.class
-*.log
-*.pyc
-*.swp
+# macOS
 .DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# Swift Package Manager
 .swiftpm/
-migrate_working_dir/
+.build/
+Packages/
+Package.resolved
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
+# CocoaPods (unused but ignore if ever introduced)
+Pods/
+
+# Editors
+*.swp
 .idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
 #.vscode/
 
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-/android/app/.*/*
-
+# Env / secrets
+.env
 .env/
 .claude/
+
+# BLE sniff captures (raw HCI traces, session-specific)
+*.pklg
+*_Raw.txt
+*_PacketLog*.txt
+*_QuickNotes_Text.txt
+Extracted Data/

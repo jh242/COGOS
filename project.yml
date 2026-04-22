@@ -1,0 +1,32 @@
+name: COGOS
+options:
+  bundleIdPrefix: com.jackhu
+  deploymentTarget:
+    iOS: "26.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: false
+
+targets:
+  COGOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: COGOS
+        excludes:
+          - README.md
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jackhu.cogos
+        SWIFT_OBJC_BRIDGING_HEADER: COGOS/Supporting/COGOS-Bridging-Header.h
+        INFOPLIST_FILE: COGOS/Supporting/Info.plist
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: false
+    dependencies:
+      - sdk: WeatherKit.framework
+    entitlements:
+      path: COGOS/Supporting/COGOS.entitlements
+      properties:
+        com.apple.developer.weatherkit: true
