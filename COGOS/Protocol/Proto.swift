@@ -47,32 +47,38 @@ actor Proto {
         return seq
     }
 
-    /// Send a cumulative text update. `text` should contain the full answer
-    /// assembled so far — firmware replaces its buffer and paginates.
-    /// Consumes one seq; chunks share it.
+    /// Send a text update. Defaults match the streaming phase (cumulative
+    /// full answer, firmware tails). Override `status` / `scrollFlag` for
+    /// auto-scroll and interactive-scroll updates — see
+    /// `EvenAIText54.Status` and `EvenAIText54.ScrollFlag`.
+    /// Consumes one seq; multi-chunk payloads share it.
     @discardableResult
-    func sendEvenAIText(_ text: String, timeoutMs: Int = 2000) async -> Bool {
-        await sendEvenAIText54(text, status: .streaming, timeoutMs: timeoutMs)
-    }
-
-    /// Final re-send of the full answer with the "complete" status byte
-    /// (0x64). Without this, firmware stays in streaming mode and single-tap
-    /// page scroll is a no-op. See the `HeldLeftBar_AI_MultiLineWithScroll`
-    /// capture: byte 11 flips `0xFF → 0x64` exactly once, after the last
-    /// streaming chunk, to hand the text off to the scrollable viewer.
-    @discardableResult
-    func sendEvenAITextComplete(_ text: String, timeoutMs: Int = 2000) async -> Bool {
-        await sendEvenAIText54(text, status: .complete, timeoutMs: timeoutMs)
-    }
-
-    private func sendEvenAIText54(_ text: String, status: EvenAIText54.Status, timeoutMs: Int) async -> Bool {
+    func sendEvenAIText(
+        _ text: String,
+        status: UInt8 = EvenAIText54.Status.streaming,
+        scrollFlag: UInt8 = EvenAIText54.ScrollFlag.passive,
+        timeoutMs: Int = 2000
+    ) async -> Bool {
         let seq = textSeq
         textSeq = textSeq &+ 1
-        let packets = EvenAIText54.textPackets(seq: seq, text: text, status: status)
+        let packets = EvenAIText54.textPackets(seq: seq, text: text, status: status, scrollFlag: scrollFlag)
         for pack in packets {
             if await queue.request(pack, lr: "L", timeoutMs: timeoutMs) == nil { return false }
             if await queue.request(pack, lr: "R", timeoutMs: timeoutMs) == nil { return false }
         }
+        return true
+    }
+
+    /// Close packet (sub=0x01, 6 bytes) — ends a reply. OEM app sends
+    /// this after the last streaming update for short replies, and after
+    /// the user exits the scroll viewer for long replies.
+    @discardableResult
+    func sendEvenAIClose(timeoutMs: Int = 1500) async -> Bool {
+        let seq = textSeq
+        textSeq = textSeq &+ 1
+        let pack = EvenAIText54.closePacket(seq: seq)
+        if await queue.request(pack, lr: "L", timeoutMs: timeoutMs) == nil { return false }
+        if await queue.request(pack, lr: "R", timeoutMs: timeoutMs) == nil { return false }
         return true
     }
 

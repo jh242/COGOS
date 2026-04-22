@@ -68,7 +68,8 @@ Send to L first; only send to R after L acknowledges with `0xC9`.
 | App → Glasses | `0x0E 0x01` | Enable right mic |
 | App → Glasses | `0x0E 0x00` | Disable mic |
 | App → Glasses | `0x54 ... 02 ...` | AI text: prepare (one per reply) |
-| App → Glasses | `0x54 ... 03 ...` | AI text: cumulative update (chunked) |
+| App → Glasses | `0x54 ... 03 ...` | AI text: cumulative / windowed update |
+| App → Glasses | `0x54 06 00 SS 01 00` | AI text: close (ends a reply) |
 | App → Glasses | `0x25 ...` | Heartbeat (every 8s) |
 | App → Glasses | `0x04 ...` | Notification whitelist JSON |
 | App → Glasses | `0x4B ...` | Notify push |
@@ -77,42 +78,77 @@ Send to L first; only send to R after L acknowledges with `0xC9`.
 | Glasses → App | `0xF1 seq data` | LC3 audio chunk |
 | Glasses → App | `0xF5 0x17` | Long-press: start Even AI |
 | Glasses → App | `0xF5 0x18` | Stop recording |
-| Glasses → App | `0xF5 0x01` | Single tap (firmware paginates; ignore) |
+| Glasses → App | `0xF5 0x01` | Single tap (L = prev page, R = next page, in scroll viewer) |
+| Glasses → App | `0xF5 0x00` | Exit scroll viewer |
 | Glasses → App | `0xF5 0x02` | Head-up |
 | Glasses → App | `0xF5 0x04/05` | Triple tap (mode cycle) |
 | Glasses → App | `0xF5 0x20` | Double-tap exit |
 
-### 0x54 TEXT streaming (firmware-native)
+### 0x54 TEXT command family
 
-12-byte header followed by UTF-8 text (text packets only):
+Three sub-commands share the `0x54` opcode, distinguished by byte 4:
+
+- `sub=0x02` **prepare** — one per reply, opens the text channel
+- `sub=0x03` **text** — cumulative / windowed UTF-8 payload
+- `sub=0x01` **close** — ends a reply (6 bytes total)
+
+Header layout for prepare and text (sub=0x02, 0x03):
 ```
 0:  0x54
 1:  total length (header + payload)
 2:  0x00
-3:  seq (per logical message; all chunks share it)
-4:  sub  — 0x02 prepare, 0x03 text
+3:  seq (monotonic; chunks of the same physical update share it)
+4:  sub
 5:  chunk_count
 6:  0x00
 7:  chunk_index (1-based)
 8:  0x00
-9:  scroll flag — 0x00 during streaming + initial "done" re-send;
-                 0x01 on phone-driven scroll-position updates (post-done)
+9:  scroll flag
+      0x00 — streaming or phone-driven auto-scroll
+      0x01 — interactive scroll viewer (user-controlled pages)
 10: 0x00
-11: status byte —
-      prepare:   0x00
-      streaming: 0xFF (firmware pins viewport to the bottom)
-      complete:  0x64 (100; final re-send — this is what enables the
-                 firmware's native single-tap scroll viewer; without it
-                 the display stays locked to the last 3 lines)
-      0x00..0x64 scroll-position percentage when byte 9 = 0x01
-12+: UTF-8 (sub=0x03 only)
+11: status byte
+      prepare:            0x00
+      streaming:          0xFF (firmware tails; shows last ~3 lines)
+      auto-scroll:        0x64 with scroll=0x00 (phone re-sends a
+                          shrinking window every ~150ms, trimming from
+                          the front to simulate reading pace)
+      interactive:        0x00..0x64 with scroll=0x01 — the byte is
+                          the scroll-position percent (0 = top,
+                          100 = bottom)
+12+: UTF-8 text (sub=0x03 only)
 ```
 
-Each reply: one prepare, then cumulative text updates (every update carries
-the full answer so far, status=0xFF). After the last streaming update, send
-one more cumulative update with status=0x64 — firmware then hands the text
-to its scrollable viewer and single-tap scroll starts working.
-Max payload per chunk: 100 bytes. ACK: `54 0A 00 <seq> <sub> <count> 00 <idx> 00 C9`.
+Close packet is 6 bytes, no payload: `54 06 00 SS 01 00`.
+
+Max payload per physical chunk: firmware accepts up to ~0xA9 (169) bytes
+in one write but we conservatively cap at 100. ACK format for text/prepare:
+`54 0A 00 <seq> <sub> <count> 00 <idx> 00 C9`.
+
+### Reply flow (observed in OEM app captures)
+
+Short reply (fits on screen, ~≤3 lines):
+1. prepare
+2. streaming text updates (status=0xFF, scroll=0x00), each carrying the
+   full answer so far — firmware tails
+3. close (`54 06 00 SS 01 00`)
+
+Long reply (needs scrolling):
+1. prepare
+2. streaming text updates (status=0xFF, scroll=0x00)
+3. **auto-scroll phase** — after the LLM finishes, re-send updates with
+   status=0x64, scroll=0x00, trimming words from the front every ~150ms
+   until the remaining text fits on screen
+4. **interactive entry** — one more update with scroll=0x01, status=0x64
+   (percent=100, showing the end). This flips the viewer into
+   user-controlled mode
+5. on each `0xF5 0x01` tap: send update with scroll=0x01, status=\<percent\>,
+   and a payload window starting at that page. Tap from L arm = previous
+   page, R arm = next page
+6. on `0xF5 0x00`: send close
+
+The earlier assumption that a single `status=0x64` re-send enables
+native scroll was wrong — what unlocks scroll is the `scroll=0x01` byte.
 
 ---
 

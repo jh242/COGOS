@@ -197,11 +197,9 @@ final class EvenAISession: ObservableObject {
         if accumulated != lastSent && isRunning {
             _ = await proto.sendEvenAIText(format(accumulated))
         }
-        // Flip firmware into scrollable mode: re-send the full answer with
-        // status=0x64. Without this, the display stays pinned to the last
-        // 3 lines and single-tap scroll does nothing.
+        // Match OEM reply shape: close the channel with a sub=0x01 packet.
         if isRunning && !accumulated.isEmpty {
-            _ = await proto.sendEvenAITextComplete(format(accumulated))
+            _ = await proto.sendEvenAIClose()
         }
         return accumulated
     }
