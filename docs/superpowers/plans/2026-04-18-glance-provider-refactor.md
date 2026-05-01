@@ -199,7 +199,7 @@ Tick-then-sleep so the first push lands immediately at connect, not
 ## Sequencing
 
 ### Phase 0 — Prep
-- [ ] Bump `IPHONEOS_DEPLOYMENT_TARGET = 18.0` in Xcode project
+- [ ] Bump iOS deployment target to 18.0 in XcodeGen spec (`project.yml`), then regenerate project files
 - [ ] Strip every `#available(iOS 15/16/17, *)` branch and its `else` arm
 - [ ] Update CLAUDE.md iOS version line
 - [ ] Enable WeatherKit capability on the App ID
@@ -242,6 +242,16 @@ Tick-then-sleep so the first push lands immediately at connect, not
 
 **Exit:** all four providers implement the new protocol; old protocol is gone.
 
+
+### Phase 4.5 — Transit hardening (commute context provider)
+- [ ] Define deterministic station ranking (distance, line viability, and stable tie-breakers)
+- [ ] Add 200 m hysteresis policy to reduce slot flapping (enter/exit thresholds + optional dwell)
+- [ ] Define stale-data TTL behavior for API failures (retain-last-good vs immediate clear)
+- [ ] Decide and document fallback behavior when arrivals are empty
+- [ ] Add targeted tests: boundary jitter, multi-station tie cases, network recovery
+
+**Exit:** commute note is stable under GPS jitter, deterministic across ties, and explicitly specified for outage/empty-arrival states.
+
 ### Phase 5 — Service rewrite
 - [ ] Replace `GlanceService.refresh` with the 5 s `tick` + `push` loop
 - [ ] Multi-slot fill, diff-gate against `lastSlots: [QuickNote?]`
@@ -256,7 +266,10 @@ Tick-then-sleep so the first push lands immediately at connect, not
 - Connect: glasses receive `0x06 0x06 MODE (dual, quickNotes)` once, then `0x06 0x01 + commit` every ~5 s
 - Heartbeat: no `0x25` traffic
 - Calendar: remove all events from EventKit → slot 1 empty, Transit shifts up
-- Transit: walk > 200 m from station (or mock location) → slot empties on next tick
+- Transit boundary stability: simulate jitter around the 200 m threshold; slot does not flap due to hysteresis policy
+- Transit multi-station tie: deterministic station selection is stable across repeated ticks
+- Transit outage behavior: API failure follows documented TTL/fallback policy
+- Transit distance gating: walk > 200 m from station (or mock location) → slot empties per policy
 - Notifications: receive a push → appears within 5 s
 - Weather: temperature + condition match Apple Weather app for the same coordinates
 - Clock: visible HH:MM on glasses stays within 1 s of phone clock (5 s refresh keeps drift invisible)
