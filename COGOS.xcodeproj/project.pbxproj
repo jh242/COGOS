@@ -35,6 +35,7 @@
 		6E37732F68B3B8FD249CE6B8 /* spec.c in Sources */ = {isa = PBXBuildFile; fileRef = 521CC9293648CBB8BF35A1F9 /* spec.c */; };
 		77894810393434DC1330619D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CADF95E8AEEC032E84E3C6 /* SettingsView.swift */; };
 		7F25D470BC1D6DA2A5D5A6C2 /* WTFTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E02B6A57AE767C8ECC45B65 /* WTFTClient.swift */; };
+		812BAEBF6FC8E9A3AF570B9B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2AE5556BD9A432BFF5689DB6 /* Assets.xcassets */; };
 		85EB99995323989CABAC1B37 /* energy.c in Sources */ = {isa = PBXBuildFile; fileRef = A75CFBAE5EC7231466924D34 /* energy.c */; };
 		86C0FCC167E172A3B7BAE7B8 /* TransitSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C288D5B1E74BDDEB923DE0 /* TransitSource.swift */; };
 		8C5780789BC25B55F7008DD1 /* bwdet.c in Sources */ = {isa = PBXBuildFile; fileRef = 334CD6E5DEC843341A0EC055 /* bwdet.c */; };
@@ -82,13 +83,14 @@
 		2970D28CAD7C72404A1C3BB5 /* EvenAISession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvenAISession.swift; sourceTree = "<group>"; };
 		29DB840C9E65CE8B6C30956B /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		2A1E60223794CB4C3849E8DE /* EvenAIText54.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvenAIText54.swift; sourceTree = "<group>"; };
+		2AE5556BD9A432BFF5689DB6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2B1F9D2472C420E1CB64CB89 /* tns.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tns.c; sourceTree = "<group>"; };
 		2E02B6A57AE767C8ECC45B65 /* WTFTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WTFTClient.swift; sourceTree = "<group>"; };
 		31FC4DB318EF1384F29A6733 /* ltpf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ltpf.h; sourceTree = "<group>"; };
 		334CD6E5DEC843341A0EC055 /* bwdet.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bwdet.c; sourceTree = "<group>"; };
 		33FE4A560EBA557285057C21 /* NewsSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsSource.swift; sourceTree = "<group>"; };
 		35E8466FC63EFDCC69500D44 /* COGOS-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "COGOS-Bridging-Header.h"; sourceTree = "<group>"; };
-		362EB46F822DF8026FD9AC77 /* COGOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = COGOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		362EB46F822DF8026FD9AC77 /* COGOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = COGOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		37E57E2CC7EFCED1900AD38A /* EvenaiModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvenaiModel.swift; sourceTree = "<group>"; };
 		3B37841C194DD596A694DF6B /* lc3.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lc3.h; sourceTree = "<group>"; };
 		44B0BF405104719EB8E060F0 /* spec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = spec.h; sourceTree = "<group>"; };
@@ -276,6 +278,7 @@
 		80ADCA5D08602D81A96EF623 /* COGOS */ = {
 			isa = PBXGroup;
 			children = (
+				2AE5556BD9A432BFF5689DB6 /* Assets.xcassets */,
 				EBFD5D5495495CFA6F4BA40B /* API */,
 				26F25386C1208A27D2ACC42C /* App */,
 				5E21880841013CF85486F583 /* BLE */,
@@ -376,6 +379,7 @@
 			buildConfigurationList = AF81FFFA3FD39DC3116C19BA /* Build configuration list for PBXNativeTarget "COGOS" */;
 			buildPhases = (
 				BCEBD97653A64E2B5EBAC826 /* Sources */,
+				3DD009325D6C7E35F741D04F /* Resources */,
 				41DE3996FF9598ED720A4ACC /* Frameworks */,
 			);
 			buildRules = (
@@ -397,6 +401,12 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					35E6077B42B7402E18DB8D66 = {
+						DevelopmentTeam = GQNYY47R5M;
+						ProvisioningStyle = Automatic;
+					};
+				};
 			};
 			buildConfigurationList = 258A5FB7ABC027572EBACF0C /* Build configuration list for PBXProject "COGOS" */;
 			developmentRegion = en;
@@ -416,6 +426,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3DD009325D6C7E35F741D04F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				812BAEBF6FC8E9A3AF570B9B /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		BCEBD97653A64E2B5EBAC826 /* Sources */ = {
@@ -488,6 +509,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = COGOS/Supporting/COGOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GQNYY47R5M;
@@ -574,6 +596,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = COGOS/Supporting/COGOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GQNYY47R5M;

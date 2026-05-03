@@ -17,6 +17,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jackhu.cogos
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: GQNYY47R5M
         SWIFT_OBJC_BRIDGING_HEADER: COGOS/Supporting/COGOS-Bridging-Header.h
         INFOPLIST_FILE: COGOS/Supporting/Info.plist
         MARKETING_VERSION: "1.0.0"
