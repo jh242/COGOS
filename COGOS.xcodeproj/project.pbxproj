@@ -36,6 +36,7 @@
 		77894810393434DC1330619D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CADF95E8AEEC032E84E3C6 /* SettingsView.swift */; };
 		7F25D470BC1D6DA2A5D5A6C2 /* WTFTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E02B6A57AE767C8ECC45B65 /* WTFTClient.swift */; };
 		812BAEBF6FC8E9A3AF570B9B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2AE5556BD9A432BFF5689DB6 /* Assets.xcassets */; };
+		82A120C3F77C4A25B8E0F120 /* icon-120.png in Resources */ = {isa = PBXBuildFile; fileRef = 82A120C2F77C4A25B8E0F120 /* icon-120.png */; };
 		85EB99995323989CABAC1B37 /* energy.c in Sources */ = {isa = PBXBuildFile; fileRef = A75CFBAE5EC7231466924D34 /* energy.c */; };
 		86C0FCC167E172A3B7BAE7B8 /* TransitSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C288D5B1E74BDDEB923DE0 /* TransitSource.swift */; };
 		8C5780789BC25B55F7008DD1 /* bwdet.c in Sources */ = {isa = PBXBuildFile; fileRef = 334CD6E5DEC843341A0EC055 /* bwdet.c */; };
@@ -121,6 +122,7 @@
 		8EAA90A7B5FAC89F9D4548C7 /* CRC32XZ.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRC32XZ.swift; sourceTree = "<group>"; };
 		904F0F878EC8D88996DF684D /* plc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = plc.c; sourceTree = "<group>"; };
 		A096EC2FC6E902A754ABD323 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		82A120C2F77C4A25B8E0F120 /* icon-120.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-120.png"; sourceTree = "<group>"; };
 		A1FC7B4A9C67DC441FD742DC /* SSEParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSEParser.swift; sourceTree = "<group>"; };
 		A3F0F0D255CA43840D0DA505 /* energy.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = energy.h; sourceTree = "<group>"; };
 		A61E0FBD100FAB74083F00A3 /* ServiceIdentifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceIdentifiers.swift; sourceTree = "<group>"; };
@@ -299,6 +301,7 @@
 				35E8466FC63EFDCC69500D44 /* COGOS-Bridging-Header.h */,
 				B0739DD36500B6D8DC9B9620 /* COGOS.entitlements */,
 				A096EC2FC6E902A754ABD323 /* Info.plist */,
+				82A120C2F77C4A25B8E0F120 /* icon-120.png */,
 			);
 			path = Supporting;
 			sourceTree = "<group>";
@@ -433,6 +436,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				812BAEBF6FC8E9A3AF570B9B /* Assets.xcassets in Resources */,
+				82A120C3F77C4A25B8E0F120 /* icon-120.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
