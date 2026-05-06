@@ -58,6 +58,11 @@ final class GestureRouter {
         case 0x11: // ACTION_BINDING_SUCCESS
             break
         case 0x17: // ACTION_LONG_PRESS_HELD — start Even AI
+            let silentMode = UserDefaults.standard.bool(forKey: "app_silent_mode")
+            if silentMode {
+                print("Ignoring long-press start because app_silent_mode is enabled")
+                break
+            }
             Task { await session.toStartEvenAIByOS() }
         case 0x18: // ACTION_LONG_PRESS_RELEASED
             Task { await session.recordOverByOS() }
