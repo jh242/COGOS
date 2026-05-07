@@ -10,6 +10,7 @@ final class Settings: ObservableObject {
     @Published var baseURL: String { didSet { defaults.set(baseURL, forKey: "llm_base_url") } }
     @Published var model: String { didSet { defaults.set(model, forKey: "llm_model") } }
     @Published var useStreaming: Bool { didSet { defaults.set(useStreaming, forKey: "llm_use_streaming") } }
+    @Published var maxOutputTokens: Int { didSet { defaults.set(maxOutputTokens, forKey: "llm_max_output_tokens") } }
     @Published var silenceThreshold: Int { didSet { defaults.set(silenceThreshold, forKey: "silence_threshold") } }
     @Published var headUpAngle: Int { didSet { defaults.set(headUpAngle, forKey: "head_up_angle") } }
     @Published var brightness: Int { didSet { defaults.set(brightness, forKey: "display_brightness") } }
@@ -20,10 +21,11 @@ final class Settings: ObservableObject {
         let legacy = defaults.string(forKey: "anthropic_api_key") ?? ""
         let stored = defaults.string(forKey: "llm_api_key") ?? ""
         let pickedKey = stored.isEmpty ? legacy : stored
-        self.apiKey = pickedKey.isEmpty ? "local" : pickedKey
-        self.baseURL = defaults.string(forKey: "llm_base_url") ?? "http://jh-workstation:8900/v1/"
-        self.model = defaults.string(forKey: "llm_model") ?? "llama.cpp/gemma4:31b"
+        self.apiKey = pickedKey
+        self.baseURL = defaults.string(forKey: "llm_base_url") ?? Self.defaultOpenRouterBaseURL
+        self.model = defaults.string(forKey: "llm_model") ?? Self.defaultOpenRouterModel
         self.useStreaming = defaults.object(forKey: "llm_use_streaming") as? Bool ?? false
+        self.maxOutputTokens = defaults.object(forKey: "llm_max_output_tokens") as? Int ?? 1024
         self.silenceThreshold = defaults.object(forKey: "silence_threshold") as? Int ?? 2
         self.headUpAngle = defaults.object(forKey: "head_up_angle") as? Int ?? 30
         self.brightness = defaults.object(forKey: "display_brightness") as? Int ?? 21
@@ -48,9 +50,18 @@ final class Settings: ObservableObject {
         return env.isEmpty ? apiKey.trimmingCharacters(in: .whitespaces) : env
     }
 
-    func makeChatClient() -> ChatCompletionsClient? {
+    static let defaultOpenRouterBaseURL = "https://openrouter.ai/api/v1/"
+    static let defaultOpenRouterModel = "openai/gpt-4.1-mini"
+
+    func makeLLMBackend() -> LLMBackend? {
         let key = resolvedAPIKey
         guard !key.isEmpty, let url = URL(string: baseURL) else { return nil }
-        return OpenAICompatibleClient(baseURL: url, apiKey: key, model: model, useStreaming: useStreaming)
+        return OpenRouterBackend(
+            baseURL: url,
+            apiKey: key,
+            model: model,
+            maxTokens: maxOutputTokens,
+            useStreaming: useStreaming
+        )
     }
 }

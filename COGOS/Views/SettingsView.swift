@@ -18,10 +18,13 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Toggle("Stream responses", isOn: $settings.useStreaming)
+                Stepper(value: $settings.maxOutputTokens, in: 128...4096, step: 128) {
+                    LabeledContent("Max output", value: "\(settings.maxOutputTokens) tokens")
+                }
             } header: {
                 Text("Assistant Endpoint")
             } footer: {
-                Text("COGOS works with OpenAI-compatible chat completions endpoints.")
+                Text("OpenRouter is the default. Any OpenAI-compatible chat completions base URL still works.")
             }
 
             Section {

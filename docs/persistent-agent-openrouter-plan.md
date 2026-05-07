@@ -18,9 +18,9 @@ Today, `EvenAISession` owns too many responsibilities:
 - conversation history updates
 - reset/stop session state
 
-`ClaudeSession` currently acts as ephemeral conversation memory, but it is not durable, not compacted, and not an agent state model.
+Pre-Phase 2, `ClaudeSession` acted as ephemeral conversation memory, but it was not durable, not compacted, and not an agent state model.
 
-`ChatCompletionsClient` currently targets OpenAI-compatible `/v1/chat/completions` APIs and should remain the compatibility baseline.
+Pre-Phase 3, `ChatCompletionsClient` targeted OpenAI-compatible `/v1/chat/completions` APIs. `OpenRouterBackend` now owns that compatibility baseline.
 
 ## Target architecture
 
@@ -292,7 +292,7 @@ It should support:
 - tool-call parsing
 - one-shot fallback if streaming is disabled
 
-It should preserve compatibility with current `OpenAICompatibleClient` behavior where possible.
+It should preserve compatibility with the previous `OpenAICompatibleClient` behavior where possible.
 
 ## Tool system
 
@@ -592,6 +592,8 @@ Once the runtime is stable, remove old session-memory paths and retire `ClaudeSe
 ## First Codex task
 
 Implement Phase 1 only.
+
+Note: current G1 0x54 display streaming is wonky for multi-page responses. Treat the renderer extraction as the place to isolate and harden this path: a reply should use one prepared text message sequence, cumulative text updates, and a final complete re-send so firmware scroll mode works reliably.
 
 Do not add tools yet.
 Do not add persistence yet.

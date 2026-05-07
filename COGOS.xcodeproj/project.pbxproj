@@ -14,7 +14,6 @@
 		126BDE5DF41E376DD054E8D6 /* CalendarSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C4E740E4008CAB936BA5EC /* CalendarSource.swift */; };
 		17DDF2C02C3462E72C75DDF5 /* NotificationSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2050FB1FD7A27BF2158CE35D /* NotificationSource.swift */; };
 		1F4A6C183C2A579E75C77B21 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5FFC7DA5A8E8B87E1363FF0 /* ContentView.swift */; };
-		246B2F080234F4B646D471D5 /* ChatCompletionsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EF4C74AD3FD69D8FF37E33 /* ChatCompletionsClient.swift */; };
 		248F297C529B0B56BA58868B /* tables.c in Sources */ = {isa = PBXBuildFile; fileRef = B73561314F90501277D6F481 /* tables.c */; };
 		275C3F87AFA739B90BA1F848 /* EvenaiModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E57E2CC7EFCED1900AD38A /* EvenaiModel.swift */; };
 		2DEFB2786588E3A7CFE3F862 /* NativeLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F4E52F97091402FF3A89933 /* NativeLocation.swift */; };
@@ -26,7 +25,6 @@
 		3D0AF517FD7CA5041BBF54A0 /* NotificationWhitelist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C538B82519825AD909A74EB /* NotificationWhitelist.swift */; };
 		3DDB4B213A0A9CC39E2A4D52 /* GestureRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 834992D5E63AEBF3E91DE9C2 /* GestureRouter.swift */; };
 		40D39E69967C289BA9BF32EC /* WeatherSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083F9CAC3CE27674F2A039ED /* WeatherSource.swift */; };
-		422DC4839C418FCE57C178CE /* ClaudeSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 527494C28AFA08BD8D708DCD /* ClaudeSession.swift */; };
 		47400635D05F51C76BC3354D /* ContextProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83473F3FCAFCD231DBE4E9A /* ContextProvider.swift */; };
 		528AF28FAE8928DD63DBBCAC /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F2FA8FC456628ED332176E5 /* Settings.swift */; };
 		55A88479424735D8C900840D /* FeaturesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D863FBE980098127214B06 /* FeaturesView.swift */; };
@@ -45,6 +43,18 @@
 		966128DC4254474D124AC4D6 /* bits.c in Sources */ = {isa = PBXBuildFile; fileRef = DA59E8FC25946CBE1D937AC3 /* bits.c */; };
 		98A7E64BE37E77CA96D79E35 /* WeatherKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B5B695492CC6171FC8FAC05A /* WeatherKit.framework */; };
 		99F563B2A3240D684B457320 /* EvenAISession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2970D28CAD7C72404A1C3BB5 /* EvenAISession.swift */; };
+		A00000000000000000000001 /* EvenTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000002 /* EvenTextRenderer.swift */; };
+		A00000000000000000000003 /* VoiceCaptureController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000004 /* VoiceCaptureController.swift */; };
+		A00000000000000000000007 /* AgentEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000008 /* AgentEvent.swift */; };
+		A00000000000000000000009 /* AgentMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000A /* AgentMemory.swift */; };
+		A0000000000000000000000B /* AgentMemoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000C /* AgentMemoryStore.swift */; };
+		A0000000000000000000000D /* AgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000E /* AgentRuntime.swift */; };
+		A0000000000000000000000F /* ContextCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000010 /* ContextCompiler.swift */; };
+		A00000000000000000000011 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000012 /* ChatMessage.swift */; };
+		A00000000000000000000014 /* LLMBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000015 /* LLMBackend.swift */; };
+		A00000000000000000000016 /* LLMRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000017 /* LLMRequest.swift */; };
+		A00000000000000000000018 /* LLMBackendEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000019 /* LLMBackendEvent.swift */; };
+		A0000000000000000000001A /* OpenRouterBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001B /* OpenRouterBackend.swift */; };
 		9AF8618B38914DBA84B623EF /* DashboardProto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6601BC5C83528FD190FC5316 /* DashboardProto.swift */; };
 		9C9348268C0E08B208A27683 /* BleRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C079222240F399242EE1DFF /* BleRequestQueue.swift */; };
 		A35025D5C8C701702E442E14 /* NotifyModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AEB4DE5B28BF0FF973F8E8C /* NotifyModel.swift */; };
@@ -102,7 +112,6 @@
 		513AF4F1F62F74B415676ECC /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		5177E9DF759054FF56F62828 /* QuickNoteProto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteProto.swift; sourceTree = "<group>"; };
 		521CC9293648CBB8BF35A1F9 /* spec.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = spec.c; sourceTree = "<group>"; };
-		527494C28AFA08BD8D708DCD /* ClaudeSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSession.swift; sourceTree = "<group>"; };
 		544C153918CAFC78B3B9951C /* ltpf_arm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ltpf_arm.h; sourceTree = "<group>"; };
 		596B6DAF76A720ADDF1C2BFF /* rnnoise.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = rnnoise.h; sourceTree = "<group>"; };
 		60275CF4FB1B39A55310F9A6 /* bwdet.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bwdet.h; sourceTree = "<group>"; };
@@ -121,6 +130,18 @@
 		8AEB4DE5B28BF0FF973F8E8C /* NotifyModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotifyModel.swift; sourceTree = "<group>"; };
 		8EAA90A7B5FAC89F9D4548C7 /* CRC32XZ.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRC32XZ.swift; sourceTree = "<group>"; };
 		904F0F878EC8D88996DF684D /* plc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = plc.c; sourceTree = "<group>"; };
+		A00000000000000000000002 /* EvenTextRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvenTextRenderer.swift; sourceTree = "<group>"; };
+		A00000000000000000000004 /* VoiceCaptureController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCaptureController.swift; sourceTree = "<group>"; };
+		A00000000000000000000008 /* AgentEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEvent.swift; sourceTree = "<group>"; };
+		A0000000000000000000000A /* AgentMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMemory.swift; sourceTree = "<group>"; };
+		A0000000000000000000000C /* AgentMemoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMemoryStore.swift; sourceTree = "<group>"; };
+		A0000000000000000000000E /* AgentRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRuntime.swift; sourceTree = "<group>"; };
+		A00000000000000000000010 /* ContextCompiler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextCompiler.swift; sourceTree = "<group>"; };
+		A00000000000000000000012 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		A00000000000000000000015 /* LLMBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMBackend.swift; sourceTree = "<group>"; };
+		A00000000000000000000017 /* LLMRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMRequest.swift; sourceTree = "<group>"; };
+		A00000000000000000000019 /* LLMBackendEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMBackendEvent.swift; sourceTree = "<group>"; };
+		A0000000000000000000001B /* OpenRouterBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterBackend.swift; sourceTree = "<group>"; };
 		A096EC2FC6E902A754ABD323 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		82A120C2F77C4A25B8E0F120 /* icon-120.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-120.png"; sourceTree = "<group>"; };
 		A1FC7B4A9C67DC441FD742DC /* SSEParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSEParser.swift; sourceTree = "<group>"; };
@@ -141,7 +162,6 @@
 		C83473F3FCAFCD231DBE4E9A /* ContextProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextProvider.swift; sourceTree = "<group>"; };
 		C8B5D4E02BFD7F54696EB42B /* BluetoothManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothManager.swift; sourceTree = "<group>"; };
 		D2C288D5B1E74BDDEB923DE0 /* TransitSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitSource.swift; sourceTree = "<group>"; };
-		D8EF4C74AD3FD69D8FF37E33 /* ChatCompletionsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCompletionsClient.swift; sourceTree = "<group>"; };
 		DA59E8FC25946CBE1D937AC3 /* bits.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bits.c; sourceTree = "<group>"; };
 		E151F914C9B454DFC19B44C8 /* ltpf_neon.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ltpf_neon.h; sourceTree = "<group>"; };
 		E67D1F8257988A8DCC91FCFE /* common.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = common.h; sourceTree = "<group>"; };
@@ -281,6 +301,7 @@
 			isa = PBXGroup;
 			children = (
 				2AE5556BD9A432BFF5689DB6 /* Assets.xcassets */,
+				A00000000000000000000005 /* Agent */,
 				EBFD5D5495495CFA6F4BA40B /* API */,
 				26F25386C1208A27D2ACC42C /* App */,
 				5E21880841013CF85486F583 /* BLE */,
@@ -293,6 +314,40 @@
 				C56D1328A78D9DB696F83811 /* Views */,
 			);
 			path = COGOS;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000005 /* Agent */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000008 /* AgentEvent.swift */,
+				A0000000000000000000000A /* AgentMemory.swift */,
+				A0000000000000000000000C /* AgentMemoryStore.swift */,
+				A0000000000000000000000E /* AgentRuntime.swift */,
+				A00000000000000000000010 /* ContextCompiler.swift */,
+				A00000000000000000000013 /* LLM */,
+				A00000000000000000000006 /* Render */,
+			);
+			path = Agent;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000006 /* Render */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000002 /* EvenTextRenderer.swift */,
+			);
+			path = Render;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000013 /* LLM */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000012 /* ChatMessage.swift */,
+				A00000000000000000000015 /* LLMBackend.swift */,
+				A00000000000000000000017 /* LLMRequest.swift */,
+				A00000000000000000000019 /* LLMBackendEvent.swift */,
+				A0000000000000000000001B /* OpenRouterBackend.swift */,
+			);
+			path = LLM;
 			sourceTree = "<group>";
 		};
 		AA7B0E4236883760C385ECFC /* Supporting */ = {
@@ -354,7 +409,6 @@
 		EBFD5D5495495CFA6F4BA40B /* API */ = {
 			isa = PBXGroup;
 			children = (
-				D8EF4C74AD3FD69D8FF37E33 /* ChatCompletionsClient.swift */,
 				A1FC7B4A9C67DC441FD742DC /* SSEParser.swift */,
 			);
 			path = API;
@@ -363,12 +417,12 @@
 		F897A3C33CDBF41576B99EB7 /* Session */ = {
 			isa = PBXGroup;
 			children = (
-				527494C28AFA08BD8D708DCD /* ClaudeSession.swift */,
 				2970D28CAD7C72404A1C3BB5 /* EvenAISession.swift */,
 				A926E33DD2F6609C2BC5BD23 /* PcmConverter.h */,
 				0358A3120097AC9A7C6C9644 /* PcmConverter.m */,
 				6CB5A6EB8E996CBFCD1599B0 /* SessionMode.swift */,
 				B9AFB6766B48A69DC9C88BC1 /* SpeechStreamRecognizer.swift */,
+				A00000000000000000000004 /* VoiceCaptureController.swift */,
 				601B0331DF6DB16A819D3E0E /* lc3 */,
 			);
 			path = Session;
@@ -454,14 +508,13 @@
 				C8D8985F38C6DA2B0D52084F /* COGOSApp.swift in Sources */,
 				0498D9C44DA81E21502D7D33 /* CRC32XZ.swift in Sources */,
 				126BDE5DF41E376DD054E8D6 /* CalendarSource.swift in Sources */,
-				246B2F080234F4B646D471D5 /* ChatCompletionsClient.swift in Sources */,
-				422DC4839C418FCE57C178CE /* ClaudeSession.swift in Sources */,
 				1F4A6C183C2A579E75C77B21 /* ContentView.swift in Sources */,
 				47400635D05F51C76BC3354D /* ContextProvider.swift in Sources */,
 				9AF8618B38914DBA84B623EF /* DashboardProto.swift in Sources */,
 				31773D0CD93C18E24DCFB0F7 /* DashboardTypes.swift in Sources */,
 				99F563B2A3240D684B457320 /* EvenAISession.swift in Sources */,
 				BD2DFA7779B0EB62BBEA440F /* EvenAIText54.swift in Sources */,
+				A00000000000000000000001 /* EvenTextRenderer.swift in Sources */,
 				275C3F87AFA739B90BA1F848 /* EvenaiModel.swift in Sources */,
 				55A88479424735D8C900840D /* FeaturesView.swift in Sources */,
 				38BB35AA5F4EC845570652F3 /* GattProtocol.swift in Sources */,
@@ -486,6 +539,17 @@
 				528AF28FAE8928DD63DBBCAC /* Settings.swift in Sources */,
 				77894810393434DC1330619D /* SettingsView.swift in Sources */,
 				D2115F1E81D86C34A38A2AFD /* SpeechStreamRecognizer.swift in Sources */,
+				A00000000000000000000003 /* VoiceCaptureController.swift in Sources */,
+				A00000000000000000000007 /* AgentEvent.swift in Sources */,
+				A00000000000000000000009 /* AgentMemory.swift in Sources */,
+				A0000000000000000000000B /* AgentMemoryStore.swift in Sources */,
+				A0000000000000000000000D /* AgentRuntime.swift in Sources */,
+				A0000000000000000000000F /* ContextCompiler.swift in Sources */,
+				A00000000000000000000011 /* ChatMessage.swift in Sources */,
+				A00000000000000000000014 /* LLMBackend.swift in Sources */,
+				A00000000000000000000016 /* LLMRequest.swift in Sources */,
+				A00000000000000000000018 /* LLMBackendEvent.swift in Sources */,
+				A0000000000000000000001A /* OpenRouterBackend.swift in Sources */,
 				8C70826DC65118021C1F4465 /* TextEntryView.swift in Sources */,
 				86C0FCC167E172A3B7BAE7B8 /* TransitSource.swift in Sources */,
 				7F25D470BC1D6DA2A5D5A6C2 /* WTFTClient.swift in Sources */,
