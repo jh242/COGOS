@@ -3,18 +3,26 @@ import Foundation
 /// Compacted, app-owned agent state. Phase 2 starts with durable recent
 /// conversation turns; rolling summary and bindings are placeholders for
 /// later phases without changing the runtime shape.
+///
+/// Bump `currentSchemaVersion` whenever the on-disk shape changes in a
+/// non-additive way. The store rotates incompatible files to `.bak-<ts>`
+/// rather than silently wiping conversation history.
 struct AgentMemory: Codable, Sendable {
     static let maxRecentTurns = 20
+    static let currentSchemaVersion = 1
 
+    var schemaVersion: Int
     var rollingSummary: String
     var recentTurns: [ConversationTurn]
     var sidebarBindings: [SidebarBinding]
 
     init(
+        schemaVersion: Int = AgentMemory.currentSchemaVersion,
         rollingSummary: String = "",
         recentTurns: [ConversationTurn] = [],
         sidebarBindings: [SidebarBinding] = []
     ) {
+        self.schemaVersion = schemaVersion
         self.rollingSummary = rollingSummary
         self.recentTurns = recentTurns
         self.sidebarBindings = sidebarBindings
