@@ -328,14 +328,57 @@ Tool failures should be returned to the model as tool-result messages when possi
 
 ### Initial tools
 
-Start with small, safe, app-local tools:
+Phase 4 ships **one** canary tool to exercise the full loop end-to-end:
 
-- `get_current_context`
-- `get_recent_history`
-- `write_quick_note`
-- `set_dashboard_card`, if the dashboard model is ready
+- `write_agent_note(title, body)` — lets the agent write to the "Agent" glance context provider.
+  Writes through a new `AgentSource` ContextProvider, not directly to a
+  Quick Notes slot. Slot allocation, priority, and conflicts with other
+  providers are decided by `GlanceService` exactly as for any other source.
 
-Weather/news tools can follow after the runtime is stable.
+Explicitly **cut** from Phase 4 (and from the tool surface entirely):
+
+- `get_recent_history` — already injected by `ContextCompiler` into
+  every request. Re-exposing it as a tool would be a more expensive
+  way to deliver data the model already has.
+- `get_current_context` — ambient state (time, location, weather snapshot)
+  belongs in the system prompt every turn, not behind a tool round-trip.
+  Phase 6 / system-prompt work owns this; tools do not.
+
+`set_dashboard_card`, weather, news, and other tools can follow once the
+runtime is stable.
+
+#### `AgentSource` ContextProvider
+
+Rather than punching a hole through `GlanceService` to overwrite a Quick
+Notes slot, the agent gets its own glance source. This keeps the glance
+loop the single source of truth for the dashboard.
+
+Design:
+
+- New `AgentSource: ContextProvider` lives next to the other providers in
+  `COGOS/Glance/Sources/`.
+- `name = "agent"`, priority chosen so the agent's note is visible but
+  doesn't crowd out higher-priority sources (initial guess: between
+  Calendar and Notifications — final number set during implementation).
+- `currentNote` returns the most recent agent-written note, or `nil` if
+  none is active.
+- Implements a TTL (initial: 10 minutes). Past the TTL the note expires
+  and `currentNote` returns `nil`, so glance providers reclaim the slot.
+- Exposes a small `@MainActor` write API: `setNote(title:body:)` and
+  `clear()`. The `write_agent_note` tool calls `setNote(...)`. A future
+  `clear_agent_note` tool can call `clear()`.
+- `GlanceService` registers it like any other provider. No conditional
+  slot logic, no override flag, no special casing. The next tick picks
+  up the new note and pushes it through the existing
+  `setQuickNoteSlots` path.
+
+This means:
+
+- `Proto.setQuickNoteSlots` / `QuickNoteProto` need zero changes.
+- The tool layer doesn't know about BLE or Quick Notes wire format; it
+  just hands a (title, body) to `AgentSource`.
+- Removing or repurposing the agent's dashboard voice later is a
+  one-provider edit.
 
 ## Model/tool run loop
 
@@ -518,16 +561,22 @@ Create:
 - `AgentTool`
 - `ToolRegistry`
 - `ToolRunner`
-
-Add the first app-local tool.
+- `AgentSource` ContextProvider (the one-tool surface for Phase 4)
+- `write_agent_note` tool, registered against `AgentSource`
 
 Acceptance criteria:
 
 - backend sends OpenAI-style tools when enabled
 - tool calls are parsed and executed client-side
 - tool results are appended as tool messages
-- tool loop has max iteration protection
-- final answer is display-safe
+- tool loop has max iteration protection (cap: 3)
+- final answer is display-safe (no raw JSON to glasses)
+- `write_agent_note` end-to-end smoke test: voice prompt asking the
+  model to leave a note results in that note appearing on the G1
+  Quick Notes pane on the next glance tick, without disturbing the
+  other providers' slots
+- `AgentSource` participates in the existing `GlanceService` provider
+  array — no special-case branches in the glance loop
 
 ### Phase 5: Prompt JSON fallback
 

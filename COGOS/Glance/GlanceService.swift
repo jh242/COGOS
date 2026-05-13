@@ -26,14 +26,25 @@ final class GlanceService: ObservableObject {
     private var isTicking = false
     private var lastSlots: [QuickNote?] = []
 
-    init(proto: Proto, location: NativeLocation, session: EvenAISession) {
+    init(
+        proto: Proto,
+        location: NativeLocation,
+        session: EvenAISession,
+        agentSource: AgentSource
+    ) {
         self.proto = proto
         self.location = location
         self.session = session
         self.weather = WeatherSource(location: location)
+        // AgentSource participates exactly like any other provider — no
+        // special-case branches in the slot-fill loop below. Priority places
+        // it alongside Transit (1) so it sits between Calendar (0) and
+        // Notification (2). The agent provider only emits a note when the
+        // tool layer has written one inside the TTL window.
         self.providers = [
             CalendarSource(),
             TransitSource(location: location),
+            agentSource,
             NotificationSource(),
             NewsSource()
         ].sorted { $0.priority < $1.priority }

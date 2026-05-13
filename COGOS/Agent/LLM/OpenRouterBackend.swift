@@ -30,8 +30,9 @@ struct OpenRouterBackend: LLMBackend {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let urlRequest = try makeURLRequest(for: request)
-                    if useStreaming {
+                    let shouldStream = shouldStream(request)
+                    let urlRequest = try makeURLRequest(for: request, stream: shouldStream)
+                    if shouldStream {
                         try await runStreaming(req: urlRequest, continuation: continuation)
                     } else {
                         try await runOneShot(req: urlRequest, continuation: continuation)
@@ -43,21 +44,30 @@ struct OpenRouterBackend: LLMBackend {
         }
     }
 
-    private func makeURLRequest(for request: LLMRequest) throws -> URLRequest {
-        let messages = request.messages.map { ["role": $0.role, "content": $0.content] }
-        var body: [String: Any] = [
-            "model": model,
-            "max_tokens": maxTokens,
-            "messages": messages
-        ]
-        if useStreaming { body["stream"] = true }
+    private func shouldStream(_ request: LLMRequest) -> Bool {
+        // Phase 4 executes only finalized native tool calls. Most OpenAI-style
+        // APIs stream tool-call arguments as deltas, so tool-enabled turns use
+        // non-streaming until we intentionally support streamed tool deltas.
+        let hasTools = request.tools?.isEmpty == false
+        return useStreaming && !hasTools
+    }
 
-        let bodyData = try JSONSerialization.data(withJSONObject: body)
+    private func makeURLRequest(for request: LLMRequest, stream: Bool) throws -> URLRequest {
+        let tools = request.tools?.isEmpty == false ? request.tools : nil
+        let body = ChatCompletionRequestBody(
+            model: model,
+            maxTokens: maxTokens,
+            messages: request.messages,
+            tools: tools,
+            stream: stream ? true : nil
+        )
+        let bodyData = try JSONEncoder().encode(body)
+
         var req = URLRequest(url: baseURL.appendingPathComponent("chat/completions"))
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
-        req.setValue(useStreaming ? "text/event-stream" : "application/json", forHTTPHeaderField: "accept")
+        req.setValue(stream ? "text/event-stream" : "application/json", forHTTPHeaderField: "accept")
         if isOpenRouterURL(baseURL) {
             req.setValue("COGOS", forHTTPHeaderField: "X-Title")
         }
@@ -118,6 +128,14 @@ struct OpenRouterBackend: LLMBackend {
             return
         }
 
+        let toolCalls = Self.extractToolCalls(data)
+        if !toolCalls.isEmpty {
+            continuation.yield(.toolCallsFinal(toolCalls))
+            continuation.yield(.final)
+            continuation.finish()
+            return
+        }
+
         guard let content = Self.extractMessageContent(data), !content.isEmpty else {
             continuation.finish(throwing: NSError(
                 domain: "OpenRouterBackend",
@@ -152,6 +170,22 @@ struct OpenRouterBackend: LLMBackend {
         return content
     }
 
+    private static func extractToolCalls(_ data: Data) -> [ToolCall] {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = obj["choices"] as? [[String: Any]],
+              let first = choices.first,
+              let msg = first["message"] as? [String: Any],
+              let rawCalls = msg["tool_calls"] as? [[String: Any]] else { return [] }
+
+        return rawCalls.compactMap { raw in
+            guard let id = raw["id"] as? String,
+                  let fn = raw["function"] as? [String: Any],
+                  let name = fn["name"] as? String else { return nil }
+            let arguments = fn["arguments"] as? String ?? "{}"
+            return ToolCall(id: id, name: name, argumentsJSON: arguments)
+        }
+    }
+
     private static func extractDelta(_ json: String) -> String? {
         guard !json.isEmpty,
               let obj = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
@@ -165,5 +199,21 @@ struct OpenRouterBackend: LLMBackend {
 
     private func isOpenRouterURL(_ url: URL) -> Bool {
         url.host?.localizedCaseInsensitiveContains("openrouter.ai") == true
+    }
+}
+
+private struct ChatCompletionRequestBody: Encodable {
+    let model: String
+    let maxTokens: Int
+    let messages: [ChatMessage]
+    let tools: [ToolSpec]?
+    let stream: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case maxTokens = "max_tokens"
+        case messages
+        case tools
+        case stream
     }
 }

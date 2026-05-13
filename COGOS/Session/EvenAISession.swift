@@ -28,11 +28,28 @@ final class EvenAISession: ObservableObject {
     private let startTimeGap = 500
     private let stopTimeGap = 500
 
-    init(proto: Proto, speech: SpeechStreamRecognizer, settings: Settings) {
+    init(
+        proto: Proto,
+        speech: SpeechStreamRecognizer,
+        settings: Settings,
+        agentSource: AgentSource
+    ) {
         let renderer = EvenTextRenderer(proto: proto)
         self.voice = VoiceCaptureController(proto: proto, speech: speech, settings: settings)
         self.renderer = renderer
-        self.runtime = AgentRuntime(renderer: renderer) { settings.makeLLMBackend() }
+
+        // Phase 4 canary registry. The same `agentSource` instance is also
+        // registered in `GlanceService.providers`, so notes written by the
+        // tool surface inside the next ~5s tick.
+        let registry = ToolRegistry(tools: [WriteAgentNoteTool()])
+        let toolContext = ToolContext(agentSource: agentSource)
+
+        self.runtime = AgentRuntime(
+            renderer: renderer,
+            toolRegistry: registry,
+            makeToolContext: { toolContext },
+            makeBackend: { settings.makeLLMBackend() }
+        )
     }
 
     // MARK: - Lifecycle

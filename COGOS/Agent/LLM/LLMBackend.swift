@@ -13,7 +13,7 @@ struct LLMCapabilities: Codable, Sendable {
     var supportsStructuredOutput: Bool
 
     static let openAICompatibleText = LLMCapabilities(
-        supportsNativeTools: false,
+        supportsNativeTools: true,
         supportsStreaming: true,
         supportsStreamingToolCalls: false,
         supportsStructuredOutput: false

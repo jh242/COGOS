@@ -55,6 +55,13 @@
 		A00000000000000000000016 /* LLMRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000017 /* LLMRequest.swift */; };
 		A00000000000000000000018 /* LLMBackendEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000019 /* LLMBackendEvent.swift */; };
 		A0000000000000000000001A /* OpenRouterBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001B /* OpenRouterBackend.swift */; };
+		A0000000000000000000001C /* AgentSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001D /* AgentSource.swift */; };
+		A0000000000000000000001E /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001F /* JSONValue.swift */; };
+		A00000000000000000000020 /* ToolSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000021 /* ToolSpec.swift */; };
+		A00000000000000000000022 /* AgentTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000023 /* AgentTool.swift */; };
+		A00000000000000000000024 /* ToolRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000025 /* ToolRegistry.swift */; };
+		A00000000000000000000026 /* ToolRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000027 /* ToolRunner.swift */; };
+		A00000000000000000000028 /* WriteAgentNoteTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000029 /* WriteAgentNoteTool.swift */; };
 		9AF8618B38914DBA84B623EF /* DashboardProto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6601BC5C83528FD190FC5316 /* DashboardProto.swift */; };
 		9C9348268C0E08B208A27683 /* BleRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C079222240F399242EE1DFF /* BleRequestQueue.swift */; };
 		A35025D5C8C701702E442E14 /* NotifyModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AEB4DE5B28BF0FF973F8E8C /* NotifyModel.swift */; };
@@ -142,6 +149,13 @@
 		A00000000000000000000017 /* LLMRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMRequest.swift; sourceTree = "<group>"; };
 		A00000000000000000000019 /* LLMBackendEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMBackendEvent.swift; sourceTree = "<group>"; };
 		A0000000000000000000001B /* OpenRouterBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterBackend.swift; sourceTree = "<group>"; };
+		A0000000000000000000001D /* AgentSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSource.swift; sourceTree = "<group>"; };
+		A0000000000000000000001F /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
+		A00000000000000000000021 /* ToolSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolSpec.swift; sourceTree = "<group>"; };
+		A00000000000000000000023 /* AgentTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTool.swift; sourceTree = "<group>"; };
+		A00000000000000000000025 /* ToolRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolRegistry.swift; sourceTree = "<group>"; };
+		A00000000000000000000027 /* ToolRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolRunner.swift; sourceTree = "<group>"; };
+		A00000000000000000000029 /* WriteAgentNoteTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WriteAgentNoteTool.swift; sourceTree = "<group>"; };
 		A096EC2FC6E902A754ABD323 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		82A120C2F77C4A25B8E0F120 /* icon-120.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-120.png"; sourceTree = "<group>"; };
 		A1FC7B4A9C67DC441FD742DC /* SSEParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSEParser.swift; sourceTree = "<group>"; };
@@ -287,6 +301,7 @@
 		68E1AEBF7ABD7F92B9C59F99 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				A0000000000000000000001D /* AgentSource.swift */,
 				F1C4E740E4008CAB936BA5EC /* CalendarSource.swift */,
 				33FE4A560EBA557285057C21 /* NewsSource.swift */,
 				2050FB1FD7A27BF2158CE35D /* NotificationSource.swift */,
@@ -326,8 +341,22 @@
 				A00000000000000000000010 /* ContextCompiler.swift */,
 				A00000000000000000000013 /* LLM */,
 				A00000000000000000000006 /* Render */,
+				A0000000000000000000002A /* Tools */,
 			);
 			path = Agent;
+			sourceTree = "<group>";
+		};
+		A0000000000000000000002A /* Tools */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000023 /* AgentTool.swift */,
+				A0000000000000000000001F /* JSONValue.swift */,
+				A00000000000000000000025 /* ToolRegistry.swift */,
+				A00000000000000000000027 /* ToolRunner.swift */,
+				A00000000000000000000021 /* ToolSpec.swift */,
+				A00000000000000000000029 /* WriteAgentNoteTool.swift */,
+			);
+			path = Tools;
 			sourceTree = "<group>";
 		};
 		A00000000000000000000006 /* Render */ = {
@@ -550,6 +579,13 @@
 				A00000000000000000000016 /* LLMRequest.swift in Sources */,
 				A00000000000000000000018 /* LLMBackendEvent.swift in Sources */,
 				A0000000000000000000001A /* OpenRouterBackend.swift in Sources */,
+				A0000000000000000000001C /* AgentSource.swift in Sources */,
+				A0000000000000000000001E /* JSONValue.swift in Sources */,
+				A00000000000000000000020 /* ToolSpec.swift in Sources */,
+				A00000000000000000000022 /* AgentTool.swift in Sources */,
+				A00000000000000000000024 /* ToolRegistry.swift in Sources */,
+				A00000000000000000000026 /* ToolRunner.swift in Sources */,
+				A00000000000000000000028 /* WriteAgentNoteTool.swift in Sources */,
 				8C70826DC65118021C1F4465 /* TextEntryView.swift in Sources */,
 				86C0FCC167E172A3B7BAE7B8 /* TransitSource.swift in Sources */,
 				7F25D470BC1D6DA2A5D5A6C2 /* WTFTClient.swift in Sources */,
