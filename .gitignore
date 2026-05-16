@@ -37,6 +37,7 @@ Pods/
 .env
 .env/
 .claude/
+.pi/
 
 # BLE sniff captures (raw HCI traces, session-specific)
 *.pklg
