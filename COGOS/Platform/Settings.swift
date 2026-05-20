@@ -15,6 +15,7 @@ final class Settings: ObservableObject {
     @Published var headUpAngle: Int { didSet { defaults.set(headUpAngle, forKey: "head_up_angle") } }
     @Published var brightness: Int { didSet { defaults.set(brightness, forKey: "display_brightness") } }
     @Published var autoBrightness: Bool { didSet { defaults.set(autoBrightness, forKey: "display_auto_brightness") } }
+    @Published var silentMode: Bool { didSet { defaults.set(silentMode, forKey: "app_silent_mode") } }
 
     init() {
         // Migrate legacy `anthropic_api_key` if present, then drop it.
@@ -30,6 +31,7 @@ final class Settings: ObservableObject {
         self.headUpAngle = defaults.object(forKey: "head_up_angle") as? Int ?? 30
         self.brightness = defaults.object(forKey: "display_brightness") as? Int ?? 21
         self.autoBrightness = defaults.object(forKey: "display_auto_brightness") as? Bool ?? true
+        self.silentMode = defaults.object(forKey: "app_silent_mode") as? Bool ?? false
         if !legacy.isEmpty {
             defaults.set(self.apiKey, forKey: "llm_api_key")
             defaults.removeObject(forKey: "anthropic_api_key")
