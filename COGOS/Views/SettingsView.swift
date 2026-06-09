@@ -41,8 +41,11 @@ struct SettingsView: View {
                 .onChange(of: settings.headUpAngle) { new in
                     Task { await appState.proto.setHeadUpAngle(new) }
                 }
+                Toggle("Silent mode", isOn: $settings.silentMode)
             } header: {
                 Text("Gestures")
+            } footer: {
+                Text("Silent mode ignores the long-press gesture so the assistant won't start listening. Also togglable via Siri.")
             }
 
             Section {

@@ -30,7 +30,7 @@ final class AppState: ObservableObject {
         let proto = Proto(queue: requestQueue)
         let session = EvenAISession(proto: proto, speech: speech, settings: settings)
         let glance = GlanceService(proto: proto, location: location, session: session)
-        let gestureRouter = GestureRouter(session: session, bluetooth: bluetooth)
+        let gestureRouter = GestureRouter(session: session, settings: settings, bluetooth: bluetooth)
 
         self.settings = settings
         self.history = history
