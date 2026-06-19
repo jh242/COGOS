@@ -73,6 +73,12 @@ struct SettingsView: View {
                 Text("Brightness changes are sent to connected glasses.")
             }
 
+            Section(header: Text("Context")) {
+                NavigationLink("Context Providers") {
+                    ContextProvidersSettingsView()
+                }
+            }
+
             Section {
                 NavigationLink {
                     NotificationSettingsView()
