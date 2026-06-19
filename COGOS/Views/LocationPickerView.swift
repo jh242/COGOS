@@ -2,7 +2,7 @@ import SwiftUI
 import MapKit
 
 struct LocationPickerView: View {
-    @EnvironmentObject var location: NativeLocation
+    @EnvironmentObject var appState: AppState
     @StateObject private var completer = LocationSearchCompleter()
     @Environment(\.dismiss) private var dismiss
 
@@ -46,7 +46,7 @@ struct LocationPickerView: View {
                 }
             }
             .onAppear {
-                if let here = location.lastKnownLocation() {
+                if let here = appState.location.lastKnownLocation() {
                     completer.bias(to: here.coordinate)
                 }
             }
