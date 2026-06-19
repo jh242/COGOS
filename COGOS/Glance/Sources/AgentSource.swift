@@ -5,7 +5,6 @@ import Foundation
 /// it. No BLE or slot override logic lives in the agent runtime.
 final class AgentSource: ContextProvider, @unchecked Sendable {
     let name = "agent"
-    let priority = 1
 
     private static let ttl: TimeInterval = 10 * 60
     private var latest: Entry?

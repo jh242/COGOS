@@ -9,7 +9,6 @@ import FoundationModels
 /// are skipped so the remaining summaries can still be displayed.
 final class NewsSource: ContextProvider {
     let name = "news"
-    let priority = 3
 
     private static let refreshInterval: TimeInterval = 30 * 60
     private static let separator = " · "

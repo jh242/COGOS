@@ -5,7 +5,6 @@ import Foundation
 /// of a station and the station has upcoming arrivals; otherwise nil.
 final class TransitSource: ContextProvider {
     let name = "transit"
-    let priority = 1
 
     private static let stationGateMeters: CLLocationDistance = 200
     private static let refreshInterval: TimeInterval = 60

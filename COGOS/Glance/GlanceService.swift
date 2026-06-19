@@ -9,15 +9,15 @@ import Foundation
 ///   3. Push time+weather always; push Quick Notes slots only when they
 ///      change; always commit.
 ///
-/// The service is dumb: it loops, sorts providers by priority, and pushes.
-/// All eligibility/display logic lives inside each provider's `currentNote`.
+/// The service is dumb: it loops, walks providers in array order, and
+/// pushes. All eligibility/display logic lives inside each provider's
+/// `currentNote`. Array order = priority order.
 @MainActor
 final class GlanceService: ObservableObject {
     private static let tickInterval: UInt64 = 5 * 1_000_000_000
 
     private let proto: Proto
     private let location: NativeLocation
-    private weak var session: EvenAISession?
 
     private let weather: WeatherSource
     private let providers: [ContextProvider]
@@ -29,25 +29,26 @@ final class GlanceService: ObservableObject {
     init(
         proto: Proto,
         location: NativeLocation,
-        session: EvenAISession,
+        settings: Settings,
         agentSource: AgentSource
     ) {
         self.proto = proto
         self.location = location
-        self.session = session
         self.weather = WeatherSource(location: location)
         // AgentSource participates exactly like any other provider — no
-        // special-case branches in the slot-fill loop below. Priority places
-        // it alongside Transit (1) so it sits between Calendar (0) and
-        // Notification (2). The agent provider only emits a note when the
-        // tool layer has written one inside the TTL window.
+        // special-case branches in the slot-fill loop below. Its array
+        // position sits between Transit and Notification, matching its
+        // former priority. The agent provider only emits a note when the
+        // tool layer has written one inside the TTL window. CommuteSource
+        // sits just below the agent and above Notification.
         self.providers = [
             CalendarSource(),
             TransitSource(location: location),
             agentSource,
+            CommuteSource(location: location, settings: settings),
             NotificationSource(),
             NewsSource()
-        ].sorted { $0.priority < $1.priority }
+        ]
     }
 
     // MARK: - Timer

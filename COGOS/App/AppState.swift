@@ -39,7 +39,7 @@ final class AppState: ObservableObject {
         let glance = GlanceService(
             proto: proto,
             location: location,
-            session: session,
+            settings: settings,
             agentSource: agentSource
         )
         let gestureRouter = GestureRouter(session: session, settings: settings, bluetooth: bluetooth)
