@@ -6,7 +6,6 @@ import UserNotifications
 /// minutes; otherwise `currentNote` is nil.
 final class NotificationSource: ContextProvider {
     let name = "notifications"
-    let priority = 2
 
     private static let recentWindow: TimeInterval = 10 * 60
     private static let refreshInterval: TimeInterval = 30

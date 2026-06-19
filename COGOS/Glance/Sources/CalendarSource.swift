@@ -5,7 +5,6 @@ import Foundation
 /// the next 60 minutes; otherwise `currentNote` is nil.
 final class CalendarSource: ContextProvider {
     let name = "calendar"
-    let priority = 0
 
     private static let imminentWindow: TimeInterval = 60 * 60
     private static let refreshInterval: TimeInterval = 5 * 60

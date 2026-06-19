@@ -9,8 +9,9 @@ import Foundation
 ///   3. Push time+weather always; push Quick Notes slots only when they
 ///      change; always commit.
 ///
-/// The service is dumb: it loops, sorts providers by priority, and pushes.
-/// All eligibility/display logic lives inside each provider's `currentNote`.
+/// The service is dumb: it loops, walks providers in array order, and
+/// pushes. All eligibility/display logic lives inside each provider's
+/// `currentNote`. Array order = priority order.
 @MainActor
 final class GlanceService: ObservableObject {
     private static let tickInterval: UInt64 = 5 * 1_000_000_000
@@ -37,9 +38,9 @@ final class GlanceService: ObservableObject {
         self.session = session
         self.weather = WeatherSource(location: location)
         // AgentSource participates exactly like any other provider — no
-        // special-case branches in the slot-fill loop below. Priority places
-        // it alongside Transit (1) so it sits between Calendar (0) and
-        // Notification (2). The agent provider only emits a note when the
+        // special-case branches in the slot-fill loop below. Its array
+        // position sits between Transit and Notification, matching its
+        // former priority. The agent provider only emits a note when the
         // tool layer has written one inside the TTL window.
         self.providers = [
             CalendarSource(),
@@ -47,7 +48,7 @@ final class GlanceService: ObservableObject {
             agentSource,
             NotificationSource(),
             NewsSource()
-        ].sorted { $0.priority < $1.priority }
+        ]
     }
 
     // MARK: - Timer
