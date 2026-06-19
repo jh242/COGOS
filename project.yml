@@ -33,6 +33,9 @@ targets:
       path: COGOS/Supporting/COGOS.entitlements
       properties:
         com.apple.developer.weatherkit: true
+    scheme:
+      testTargets:
+        - COGOSTests
 
   COGOSTests:
     type: bundle.unit-test
