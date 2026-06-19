@@ -33,3 +33,16 @@ targets:
       path: COGOS/Supporting/COGOS.entitlements
       properties:
         com.apple.developer.weatherkit: true
+
+  COGOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: COGOSTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jackhu.cogos.tests
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_VERSION: "5.0"
+    dependencies:
+      - target: COGOS
