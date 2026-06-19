@@ -49,10 +49,11 @@ actor Proto {
 
     /// Send a cumulative text update. `text` should contain the full answer
     /// assembled so far — firmware replaces its buffer and paginates.
-    /// Consumes one seq; chunks share it.
+    /// If `seq` is provided, it should be the value returned by this reply's
+    /// prepare packet so the whole logical text message shares one sequence.
     @discardableResult
-    func sendEvenAIText(_ text: String, timeoutMs: Int = 2000) async -> Bool {
-        await sendEvenAIText54(text, status: .streaming, timeoutMs: timeoutMs)
+    func sendEvenAIText(_ text: String, seq: UInt8? = nil, timeoutMs: Int = 2000) async -> Bool {
+        await sendEvenAIText54(text, seq: seq, status: .streaming, timeoutMs: timeoutMs)
     }
 
     /// Final re-send of the full answer with the "complete" status byte
@@ -61,13 +62,18 @@ actor Proto {
     /// capture: byte 11 flips `0xFF → 0x64` exactly once, after the last
     /// streaming chunk, to hand the text off to the scrollable viewer.
     @discardableResult
-    func sendEvenAITextComplete(_ text: String, timeoutMs: Int = 2000) async -> Bool {
-        await sendEvenAIText54(text, status: .complete, timeoutMs: timeoutMs)
+    func sendEvenAITextComplete(_ text: String, seq: UInt8? = nil, timeoutMs: Int = 2000) async -> Bool {
+        await sendEvenAIText54(text, seq: seq, status: .complete, timeoutMs: timeoutMs)
     }
 
-    private func sendEvenAIText54(_ text: String, status: EvenAIText54.Status, timeoutMs: Int) async -> Bool {
-        let seq = textSeq
-        textSeq = textSeq &+ 1
+    private func sendEvenAIText54(_ text: String, seq providedSeq: UInt8?, status: EvenAIText54.Status, timeoutMs: Int) async -> Bool {
+        let seq: UInt8
+        if let providedSeq {
+            seq = providedSeq
+        } else {
+            seq = textSeq
+            textSeq = textSeq &+ 1
+        }
         let packets = EvenAIText54.textPackets(seq: seq, text: text, status: status)
         for pack in packets {
             if await queue.request(pack, lr: "L", timeoutMs: timeoutMs) == nil { return false }

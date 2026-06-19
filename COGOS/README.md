@@ -31,9 +31,11 @@ COGOS/
 ├── App/               SwiftUI App, root state, ContentView
 ├── BLE/               BluetoothManager, BleRequestQueue, GestureRouter, UUIDs
 ├── Protocol/          Proto, EvenAIText54, DashboardProto, QuickNoteProto, CRC32XZ
-├── Session/           EvenAISession, SpeechStreamRecognizer,
-│                      ClaudeSession, PcmConverter, LC3 codec
-├── API/               ChatCompletionsClient, SSEParser
+├── Agent/             AgentRuntime, AgentMemoryStore, ContextCompiler,
+│                      OpenRouterBackend, LLMBackend, renderer
+├── Session/           EvenAISession, VoiceCaptureController,
+│                      SpeechStreamRecognizer, PcmConverter, LC3 codec
+├── API/               SSEParser
 ├── Glance/            GlanceService + Sources/
 ├── Platform/          NativeLocation, Settings, NotificationWhitelist
 ├── Models/            EvenaiModel, HistoryStore, NotifyModel
