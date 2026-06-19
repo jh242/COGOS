@@ -6,10 +6,12 @@ import Foundation
 @MainActor
 final class GestureRouter {
     private let session: EvenAISession
+    private let settings: Settings
     private weak var bluetooth: BluetoothManager?
 
-    init(session: EvenAISession, bluetooth: BluetoothManager) {
+    init(session: EvenAISession, settings: Settings, bluetooth: BluetoothManager) {
         self.session = session
+        self.settings = settings
         self.bluetooth = bluetooth
     }
 
@@ -58,6 +60,10 @@ final class GestureRouter {
         case 0x11: // ACTION_BINDING_SUCCESS
             break
         case 0x17: // ACTION_LONG_PRESS_HELD — start Even AI
+            if settings.silentMode {
+                print("Ignoring long-press start: silent mode is enabled")
+                break
+            }
             Task { await session.toStartEvenAIByOS() }
         case 0x18: // ACTION_LONG_PRESS_RELEASED
             Task { await session.recordOverByOS() }

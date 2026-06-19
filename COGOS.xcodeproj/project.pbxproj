@@ -85,6 +85,7 @@
 		DF2A779A30C3AD31A06C537E /* HistoryListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25D20652D265A564AF6740AD /* HistoryListView.swift */; };
 		E96D6057A9AF94F43B317C93 /* CommuteFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 040757D952D81EB4EB06BEAB /* CommuteFormatterTests.swift */; };
 		E9F73795DEA55FBA9740149B /* GlanceContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF213378779FAF1B5710D07 /* GlanceContext.swift */; };
+		EB4F29F38D1D14C1C239CE1B /* COGOSAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B883E31605D36CB9C7933E5 /* COGOSAppIntents.swift */; };
 		F026483CB1E484BF02E0B88C /* QuickNoteProto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5177E9DF759054FF56F62828 /* QuickNoteProto.swift */; };
 		F2673CA5AE7AFD63F22DA18B /* ToolRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 973617281AAC500109368522 /* ToolRegistry.swift */; };
 		F4288EFCCCDA2672BE07E4B2 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29DB840C9E65CE8B6C30956B /* HomeView.swift */; };
@@ -108,6 +109,7 @@
 		040757D952D81EB4EB06BEAB /* CommuteFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteFormatterTests.swift; sourceTree = "<group>"; };
 		04393FBDC617F77322CEE340 /* sns.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = sns.h; sourceTree = "<group>"; };
 		083F9CAC3CE27674F2A039ED /* WeatherSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherSource.swift; sourceTree = "<group>"; };
+		0B883E31605D36CB9C7933E5 /* COGOSAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = COGOSAppIntents.swift; sourceTree = "<group>"; };
 		0EE01BB747026B40560B8E29 /* bits.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bits.h; sourceTree = "<group>"; };
 		102321C2B19D72ED907A02DC /* lc3_cpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lc3_cpp.h; sourceTree = "<group>"; };
 		1143530E9598160C2714929F /* ContextCompiler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextCompiler.swift; sourceTree = "<group>"; };
@@ -251,6 +253,7 @@
 			children = (
 				66A057B9D941E76ED5381559 /* AppState.swift */,
 				290F37BACEFD772F577D71B3 /* COGOSApp.swift */,
+				0B883E31605D36CB9C7933E5 /* COGOSAppIntents.swift */,
 				C5FFC7DA5A8E8B87E1363FF0 /* ContentView.swift */,
 			);
 			path = App;
@@ -618,6 +621,7 @@
 				9C9348268C0E08B208A27683 /* BleRequestQueue.swift in Sources */,
 				A8A24AD0973D3B1BB12528CD /* BluetoothManager.swift in Sources */,
 				C8D8985F38C6DA2B0D52084F /* COGOSApp.swift in Sources */,
+				EB4F29F38D1D14C1C239CE1B /* COGOSAppIntents.swift in Sources */,
 				0498D9C44DA81E21502D7D33 /* CRC32XZ.swift in Sources */,
 				126BDE5DF41E376DD054E8D6 /* CalendarSource.swift in Sources */,
 				8F7C34FB5B5685DF7280EB71 /* ChatMessage.swift in Sources */,
