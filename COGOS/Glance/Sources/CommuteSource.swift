@@ -31,6 +31,58 @@ final class CommuteSource: ContextProvider {
         return QuickNote(title: "Commute", body: body)
     }
 
+    private struct Fetched {
+        let label: String
+        let minutes: Int
+        let legs: [CommuteLeg]
+    }
+
+    private func fetch(for dest: CommuteLocation, from origin: CLLocation) async -> Fetched? {
+        let originItem = MKMapItem(placemark: MKPlacemark(coordinate: origin.coordinate))
+        let destItem = MKMapItem(placemark: MKPlacemark(
+            coordinate: CLLocationCoordinate2D(latitude: dest.latitude, longitude: dest.longitude)
+        ))
+        let req = MKDirections.Request()
+        req.source = originItem
+        req.destination = destItem
+        req.transportType = .transit
+        req.requestsAlternateRoutes = true
+        let directions = MKDirections(request: req)
+
+        let response: MKDirections.Response
+        do {
+            response = try await directions.calculate()
+        } catch {
+            trace("\(dest.label): MKDirections failed — \(error.localizedDescription)")
+            return nil
+        }
+
+        let eligible = response.routes.first { route in
+            CommuteParser.transferCount(in: route.steps.map(toRawStep)) <= Self.maxTransfers
+        }
+        guard let route = eligible else {
+            trace("\(dest.label): no route with ≤\(Self.maxTransfers) transfer")
+            return nil
+        }
+        let legs = CommuteParser.legs(from: route.steps.map(toRawStep))
+        guard !legs.isEmpty else {
+            trace("\(dest.label): route had no parseable transit legs")
+            return nil
+        }
+        let minutes = max(1, Int((route.expectedTravelTime / 60).rounded()))
+        return Fetched(label: dest.label, minutes: minutes, legs: legs)
+    }
+
+    private func toRawStep(_ step: MKRoute.Step) -> RawStep {
+        let kind: RawStep.Kind
+        switch step.transportType {
+        case .walking: kind = .walking
+        case .transit: kind = .transit
+        default:       kind = .other
+        }
+        return RawStep(kind: kind, instructions: step.instructions)
+    }
+
     func refresh(_ ctx: GlanceContext) async {
         if let last = lastFetch, ctx.now.timeIntervalSince(last) < Self.refreshInterval {
             return
@@ -42,6 +94,36 @@ final class CommuteSource: ContextProvider {
             cachedRows.removeAll()
             return
         }
-        // Fetch implementation lands in Task 7.
+        guard let userLoc = location.lastKnownLocation() else {
+            trace("no user location — skipping cycle")
+            return
+        }
+
+        let nearby: Set<String> = Set(destinations.compactMap { dest -> String? in
+            let destLoc = CLLocation(latitude: dest.latitude, longitude: dest.longitude)
+            return destLoc.distance(from: userLoc) <= Self.selfSkipMeters ? dest.label : nil
+        })
+        for label in nearby { cachedRows.removeValue(forKey: label) }
+
+        let toFetch = destinations.filter { !nearby.contains($0.label) }
+        guard !toFetch.isEmpty else { return }
+
+        let results = await withTaskGroup(of: Fetched?.self, returning: [Fetched].self) { group in
+            for dest in toFetch {
+                group.addTask { await self.fetch(for: dest, from: userLoc) }
+            }
+            var collected: [Fetched] = []
+            for await r in group { if let r { collected.append(r) } }
+            return collected
+        }
+
+        for r in results {
+            cachedRows[r.label] = (label: r.label, minutes: r.minutes, legs: r.legs)
+        }
+        // Keep only entries whose label is still in the current settings list,
+        // so destinations removed by the user are evicted on the next cycle.
+        let validLabels = Set(destinations.map(\.label))
+        cachedRows = cachedRows.filter { validLabels.contains($0.key) }
+        trace("refreshed \(results.count)/\(toFetch.count) destinations")
     }
 }
