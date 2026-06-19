@@ -42,7 +42,7 @@ final class AppState: ObservableObject {
             session: session,
             agentSource: agentSource
         )
-        let gestureRouter = GestureRouter(session: session, bluetooth: bluetooth)
+        let gestureRouter = GestureRouter(session: session, settings: settings, bluetooth: bluetooth)
 
         self.settings = settings
         self.history = history
