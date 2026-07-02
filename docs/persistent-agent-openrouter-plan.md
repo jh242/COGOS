@@ -580,17 +580,27 @@ Acceptance criteria:
 
 ### Phase 5: Prompt JSON fallback
 
-Add fallback for models/providers that do not reliably support native tools.
+**Status: cut.** OpenRouter and the realistic custom-endpoint targets
+(Ollama, llama.cpp, LM Studio) all support native OpenAI-style tools now,
+and the shipped tool surface is a single canary tool. A prompt-JSON
+emulation layer is not worth its weight.
 
-Acceptance criteria:
-
-- tool mode can be `native`, `promptJSON`, `disabled`, or `auto`
-- malformed JSON gets one repair attempt
-- failures do not leak raw JSON to the glasses
+The real risk Phase 5 insured against — a backend that rejects the `tools`
+parameter failing every voice query — is handled directly instead: if the
+first request of a turn fails with an HTTP status that suggests the request
+shape was rejected, `AgentRuntime` retries once without tools and continues
+text-only (`LLMHTTPError.suggestsUnsupportedRequestShape`). Revisit only if
+a backend that genuinely cannot do native tools becomes a target.
 
 ### Phase 6: Memory compaction
 
-Add rolling summary compaction.
+**Status: implemented.** `MemoryCompactor` folds turns beyond
+`AgentMemory.maxRecentTurns` into `rollingSummary` using the same backend,
+retaining the newest `retainedTurnsAfterCompaction` turns verbatim.
+Compaction runs after the turn is persisted, inside the runtime's
+single-flight guard; failures leave memory untouched and the next turn
+retries. `hardTurnCap` bounds growth if compaction keeps failing. The full
+Q/A record stays in `HistoryStore` on the phone.
 
 Acceptance criteria:
 

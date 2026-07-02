@@ -39,8 +39,11 @@ struct ContextCompiler: Sendable {
         }
 
         if messages.count > Self.maxMessages {
-            let preservedSystem = messages.prefix(1)
-            let recent = messages.dropFirst().suffix(Self.maxMessages - preservedSystem.count)
+            // Preserve the whole system prefix (base prompt + rolling summary),
+            // then keep the newest turns that fit.
+            let systemCount = messages.prefix(while: { $0.role == "system" }).count
+            let preservedSystem = messages.prefix(systemCount)
+            let recent = messages.dropFirst(systemCount).suffix(Self.maxMessages - systemCount)
             messages = Array(preservedSystem + recent)
         }
 
