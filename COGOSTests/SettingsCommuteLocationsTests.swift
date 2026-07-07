@@ -25,6 +25,13 @@ final class SettingsCommuteLocationsTests: XCTestCase {
         XCTAssertEqual(s2.commuteLocations.map(\.label), ["Home", "Work"])
     }
 
+    func testDecodesLegacyEntriesWithoutID() {
+        let legacy = Data(#"[{"label":"Home","latitude":40.7,"longitude":-74.0}]"#.utf8)
+        UserDefaults.standard.set(legacy, forKey: key)
+        let s = Settings()
+        XCTAssertEqual(s.commuteLocations.map(\.label), ["Home"])
+    }
+
     func testSetterTruncatesPastFive() {
         let s = Settings()
         s.commuteLocations = (0..<8).map {

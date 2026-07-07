@@ -10,7 +10,7 @@ struct ContextProvidersSettingsView: View {
                 header: Text("Commute Locations"),
                 footer: Text("Up to 5. Used by CommuteSource to show transit directions.")
             ) {
-                ForEach($settings.commuteLocations, id: \.label) { $loc in
+                ForEach($settings.commuteLocations) { $loc in
                     TextField("Label", text: $loc.label)
                 }
                 .onDelete { idx in

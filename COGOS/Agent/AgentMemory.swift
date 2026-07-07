@@ -1,14 +1,20 @@
 import Foundation
 
-/// Compacted, app-owned agent state. Phase 2 starts with durable recent
-/// conversation turns; rolling summary and bindings are placeholders for
-/// later phases without changing the runtime shape.
+/// Compacted, app-owned agent state. Recent turns are kept verbatim; once
+/// they exceed `maxRecentTurns`, `MemoryCompactor` folds the oldest into
+/// `rollingSummary` (Phase 6). Bindings remain a placeholder for Phase 7.
 ///
 /// Bump `currentSchemaVersion` whenever the on-disk shape changes in a
 /// non-additive way. The store rotates incompatible files to `.bak-<ts>`
 /// rather than silently wiping conversation history.
 struct AgentMemory: Codable, Sendable {
+    /// Compaction trigger: above this, MemoryCompactor summarizes the oldest turns.
     static let maxRecentTurns = 20
+    /// Turns kept verbatim after a compaction pass.
+    static let retainedTurnsAfterCompaction = 10
+    /// Safety bound if compaction keeps failing (e.g. backend offline):
+    /// addTurn drops the oldest turns beyond this instead of growing forever.
+    static let hardTurnCap = 60
     static let currentSchemaVersion = 1
 
     var schemaVersion: Int
@@ -30,8 +36,8 @@ struct AgentMemory: Codable, Sendable {
 
     mutating func addTurn(userText: String, assistantText: String, at date: Date = Date()) {
         recentTurns.append(ConversationTurn(userText: userText, assistantText: assistantText, createdAt: date))
-        if recentTurns.count > Self.maxRecentTurns {
-            recentTurns = Array(recentTurns.suffix(Self.maxRecentTurns))
+        if recentTurns.count > Self.hardTurnCap {
+            recentTurns = Array(recentTurns.suffix(Self.hardTurnCap))
         }
     }
 }

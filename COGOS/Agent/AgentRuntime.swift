@@ -15,6 +15,7 @@ final class AgentRuntime {
 
     private let memoryStore: AgentMemoryStore
     private let contextCompiler: ContextCompiler
+    private let compactor = MemoryCompactor()
     private let renderer: EvenTextRenderer
     private let makeBackend: () -> LLMBackend?
     private let toolRegistry: ToolRegistry
@@ -82,7 +83,7 @@ final class AgentRuntime {
 
         let specs = toolRegistry.specs()
         let toolContext = makeToolContext()
-        let toolsForRequest: [ToolSpec]? = (specs.isEmpty || toolContext == nil) ? nil : specs
+        var toolsForRequest: [ToolSpec]? = (specs.isEmpty || toolContext == nil) ? nil : specs
         let runner: ToolRunner? = toolContext.map { ToolRunner(registry: toolRegistry, context: $0) }
 
         var finalAnswer: String? = nil
@@ -94,8 +95,25 @@ final class AgentRuntime {
             do {
                 turn = try await consumeTurn(backend.stream(request))
             } catch {
-                await renderer.pushReply("API error: \(error.localizedDescription)")
-                return nil
+                // A backend that rejects the `tools` parameter would otherwise
+                // fail every voice query. On the first request of a turn (no
+                // tool messages in history yet), degrade to text-only once
+                // instead of surfacing the error.
+                guard iteration == 0,
+                      toolsForRequest != nil,
+                      let http = error as? LLMHTTPError,
+                      http.suggestsUnsupportedRequestShape else {
+                    await renderer.pushReply("API error: \(error.localizedDescription)")
+                    return nil
+                }
+                print("AgentRuntime: request with tools failed (HTTP \(http.statusCode)); retrying without tools")
+                toolsForRequest = nil
+                do {
+                    turn = try await consumeTurn(backend.stream(LLMRequest(messages: messages, tools: nil)))
+                } catch {
+                    await renderer.pushReply("API error: \(error.localizedDescription)")
+                    return nil
+                }
             }
 
             lastTurnText = turn.textChunks.joined()
@@ -142,6 +160,19 @@ final class AgentRuntime {
             try await memoryStore.save(updated)
         } catch {
             print("AgentRuntime: failed to persist turn — \(error)")
+        }
+
+        // Phase 6: fold older turns into the rolling summary once the recent
+        // window overflows. The turn above is already persisted, so a failed
+        // or interrupted compaction loses nothing; the next turn retries.
+        // Runs inside the single-flight guard so it cannot race a save.
+        if compactor.needsCompaction(updated) {
+            do {
+                let compacted = try await compactor.compact(updated, using: backend)
+                try await memoryStore.save(compacted)
+            } catch {
+                print("AgentRuntime: memory compaction failed — \(error)")
+            }
         }
 
         return AgentRunResult(userText: query, assistantText: answer)

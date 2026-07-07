@@ -82,11 +82,7 @@ struct OpenRouterBackend: LLMBackend {
     ) async throws {
         let (bytes, response) = try await URLSession.shared.bytes(for: req)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            continuation.finish(throwing: NSError(
-                domain: "OpenRouterBackend",
-                code: http.statusCode,
-                userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"]
-            ))
+            continuation.finish(throwing: LLMHTTPError(statusCode: http.statusCode, bodySnippet: ""))
             return
         }
 
@@ -120,11 +116,7 @@ struct OpenRouterBackend: LLMBackend {
         let (data, response) = try await URLSession.shared.data(for: req)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let snippet = String(data: data, encoding: .utf8)?.prefix(200) ?? ""
-            continuation.finish(throwing: NSError(
-                domain: "OpenRouterBackend",
-                code: http.statusCode,
-                userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(snippet)"]
-            ))
+            continuation.finish(throwing: LLMHTTPError(statusCode: http.statusCode, bodySnippet: String(snippet)))
             return
         }
 

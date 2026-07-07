@@ -15,6 +15,7 @@
 		0BCC561948495B9A1295AEED /* WriteAgentNoteTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 638DF44024890A97CF733CC2 /* WriteAgentNoteTool.swift */; };
 		126BDE5DF41E376DD054E8D6 /* CalendarSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C4E740E4008CAB936BA5EC /* CalendarSource.swift */; };
 		17DDF2C02C3462E72C75DDF5 /* NotificationSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2050FB1FD7A27BF2158CE35D /* NotificationSource.swift */; };
+		19A884940B68F694FCCE6AF4 /* MemoryCompactor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4769A238AE7E28AE3D08E3E4 /* MemoryCompactor.swift */; };
 		1BEE1703BD89CD3D337D1C58 /* OpenRouterBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5A4078AD31D6FDEFA077982 /* OpenRouterBackend.swift */; };
 		1C525DE392ABD0563DFB8D65 /* AgentTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5192B501C2137B58576B5063 /* AgentTool.swift */; };
 		1F4A6C183C2A579E75C77B21 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5FFC7DA5A8E8B87E1363FF0 /* ContentView.swift */; };
@@ -48,6 +49,7 @@
 		7B232C82BFEF3D751AD88CA3 /* AgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60C08103D2C357F479B0AAC /* AgentRuntime.swift */; };
 		7EC7DD1E80D07D7E90F746AC /* CommuteSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 451F63B52390F68A0B95D099 /* CommuteSource.swift */; };
 		7F25D470BC1D6DA2A5D5A6C2 /* WTFTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E02B6A57AE767C8ECC45B65 /* WTFTClient.swift */; };
+		8128352B876D3CAC4F5FEEE1 /* MemoryCompactorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 751918930567C12CE9F52206 /* MemoryCompactorTests.swift */; };
 		812BAEBF6FC8E9A3AF570B9B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2AE5556BD9A432BFF5689DB6 /* Assets.xcassets */; };
 		83AFA3A2442778A4311B04B1 /* LLMBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E65B923164D0972D629CE8C /* LLMBackend.swift */; };
 		85EB99995323989CABAC1B37 /* energy.c in Sources */ = {isa = PBXBuildFile; fileRef = A75CFBAE5EC7231466924D34 /* energy.c */; };
@@ -142,6 +144,7 @@
 		44B0BF405104719EB8E060F0 /* spec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = spec.h; sourceTree = "<group>"; };
 		451F63B52390F68A0B95D099 /* CommuteSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteSource.swift; sourceTree = "<group>"; };
 		463AC972A6B4234D6616956B /* BleProbeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleProbeView.swift; sourceTree = "<group>"; };
+		4769A238AE7E28AE3D08E3E4 /* MemoryCompactor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryCompactor.swift; sourceTree = "<group>"; };
 		4B5775B8A18358A7DBB55B9E /* lc3_private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lc3_private.h; sourceTree = "<group>"; };
 		4C079222240F399242EE1DFF /* BleRequestQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleRequestQueue.swift; sourceTree = "<group>"; };
 		4C538B82519825AD909A74EB /* NotificationWhitelist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationWhitelist.swift; sourceTree = "<group>"; };
@@ -163,6 +166,7 @@
 		69E0594F7FEB604D9E8D2CBE /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
 		6BC65DDB7FC8A4D813B19193 /* TextEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEntryView.swift; sourceTree = "<group>"; };
 		6CB5A6EB8E996CBFCD1599B0 /* SessionMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionMode.swift; sourceTree = "<group>"; };
+		751918930567C12CE9F52206 /* MemoryCompactorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryCompactorTests.swift; sourceTree = "<group>"; };
 		7579D058A901E1E39AC362EF /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
 		76393C2D99D0FC6C2E43B337 /* AgentMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMemory.swift; sourceTree = "<group>"; };
 		7B594F95BE8FF12F680019BA /* ContextProvidersSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextProvidersSettingsView.swift; sourceTree = "<group>"; };
@@ -286,6 +290,7 @@
 			children = (
 				040757D952D81EB4EB06BEAB /* CommuteFormatterTests.swift */,
 				1A448B7652D112CCDCBE2505 /* CommuteParserTests.swift */,
+				751918930567C12CE9F52206 /* MemoryCompactorTests.swift */,
 				3F68B515CB2A75C34796AB4E /* SettingsCommuteLocationsTests.swift */,
 				23BC1BA8F05EB6A05F902FC0 /* Smoke.swift */,
 			);
@@ -457,6 +462,7 @@
 				693A696FFB2DBFE8B75F4C7D /* AgentMemoryStore.swift */,
 				E60C08103D2C357F479B0AAC /* AgentRuntime.swift */,
 				1143530E9598160C2714929F /* ContextCompiler.swift */,
+				4769A238AE7E28AE3D08E3E4 /* MemoryCompactor.swift */,
 				BDBDBEF2CA034E3E22A33DED /* LLM */,
 				8B6C0F23D88A6C7F5E44B962 /* Render */,
 				46A9A05D3EFB68DEF033537D /* Tools */,
@@ -601,6 +607,7 @@
 			files = (
 				E96D6057A9AF94F43B317C93 /* CommuteFormatterTests.swift in Sources */,
 				5E02A4DAD9299CE1EE429BBD /* CommuteParserTests.swift in Sources */,
+				8128352B876D3CAC4F5FEEE1 /* MemoryCompactorTests.swift in Sources */,
 				763E7C1CB188BD7E9F8D5CE2 /* SettingsCommuteLocationsTests.swift in Sources */,
 				CA507F9D225E0A8F50198D38 /* Smoke.swift in Sources */,
 			);
@@ -651,6 +658,7 @@
 				B0EC6A3116BE429F39383D4E /* LLMRequest.swift in Sources */,
 				A8BF0D8C25F1B00A8819D8A9 /* LocationPickerView.swift in Sources */,
 				9FA706B4804F6210DAF19695 /* LocationSearchCompleter.swift in Sources */,
+				19A884940B68F694FCCE6AF4 /* MemoryCompactor.swift in Sources */,
 				2DEFB2786588E3A7CFE3F862 /* NativeLocation.swift in Sources */,
 				B1EEF3D1324DFEDF3F638D08 /* NewsSource.swift in Sources */,
 				074403BC84ADF2817AB8181A /* NotificationSettingsView.swift in Sources */,
