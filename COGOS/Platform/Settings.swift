@@ -1,10 +1,28 @@
 import Foundation
 import Combine
 
-struct CommuteLocation: Codable, Equatable {
+struct CommuteLocation: Codable, Equatable, Identifiable {
+    var id: UUID
     var label: String
     var latitude: Double
     var longitude: Double
+
+    init(id: UUID = UUID(), label: String, latitude: Double, longitude: Double) {
+        self.id = id
+        self.label = label
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+
+    // Entries saved before `id` existed decode with a fresh UUID; it becomes
+    // stable once the array is next re-encoded.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.label = try c.decode(String.self, forKey: .label)
+        self.latitude = try c.decode(Double.self, forKey: .latitude)
+        self.longitude = try c.decode(Double.self, forKey: .longitude)
+    }
 }
 
 /// UserDefaults-backed app settings (replaces SharedPreferences).
