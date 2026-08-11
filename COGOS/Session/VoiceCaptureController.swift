@@ -2,9 +2,8 @@ import Foundation
 
 /// Owns the glasses mic + iOS speech-recognition capture lifecycle.
 ///
-/// Phase 1 keeps the existing behavior: start STT, enable the right mic,
-/// stop on release/silence/timeout, and surface a final transcript to the
-/// session facade. LLM calls and rendering intentionally stay outside here.
+/// Starts STT, enables the right mic, stops on release/silence/timeout, and
+/// surfaces a final transcript to the session facade.
 @MainActor
 final class VoiceCaptureController {
     private let proto: Proto
@@ -101,7 +100,6 @@ final class VoiceCaptureController {
         recordingTimeoutTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(self?.maxRecordingDuration ?? 30) * 1_000_000_000)
             guard let self = self, self.isReceivingAudio else { return }
-            await self.stop()
             await onRecordingTimeout()
         }
     }

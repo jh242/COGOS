@@ -29,22 +29,14 @@ final class GlanceService: ObservableObject {
     init(
         proto: Proto,
         location: NativeLocation,
-        settings: Settings,
-        agentSource: AgentSource
+        settings: Settings
     ) {
         self.proto = proto
         self.location = location
         self.weather = WeatherSource(location: location)
-        // AgentSource participates exactly like any other provider — no
-        // special-case branches in the slot-fill loop below. Its array
-        // position sits between Transit and Notification, matching its
-        // former priority. The agent provider only emits a note when the
-        // tool layer has written one inside the TTL window. CommuteSource
-        // sits just below the agent and above Notification.
         self.providers = [
             CalendarSource(),
             TransitSource(location: location),
-            agentSource,
             CommuteSource(location: location, settings: settings),
             NotificationSource(),
             NewsSource()

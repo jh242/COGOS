@@ -18,11 +18,12 @@ Then build & run on a physical device (BLE can't be simulated).
 If you modify the project structure (add/remove files, change build settings),
 edit `project.yml` and re-run `xcodegen generate`.
 
-## API keys
+## Hermes Agent
 
-Either enter them in the in-app Settings screen (persisted to `UserDefaults`
-under `llm_api_key`), or export `LLM_API_KEY` in the Xcode scheme. Base URL
-(default `https://api.openai.com/v1/`) and model are also configurable.
+Enter the HTTPS Hermes API URL and access token in Settings, or export
+`HERMES_API_URL` and `HERMES_API_KEY` in the Xcode scheme. The token is stored
+in Keychain. Hermes owns model selection, memory, skills, and tools; COGOS
+sends only final speech transcripts and renders streamed final-answer text.
 
 ## Project layout
 
@@ -31,11 +32,9 @@ COGOS/
 ├── App/               SwiftUI App, root state, ContentView
 ├── BLE/               BluetoothManager, BleRequestQueue, GestureRouter, UUIDs
 ├── Protocol/          Proto, EvenAIText54, DashboardProto, QuickNoteProto, CRC32XZ
-├── Agent/             AgentRuntime, AgentMemoryStore, ContextCompiler,
-│                      OpenRouterBackend, LLMBackend, renderer
-├── Session/           EvenAISession, VoiceCaptureController,
+├── Session/           EvenAISession, EvenTextRenderer, VoiceCaptureController,
 │                      SpeechStreamRecognizer, PcmConverter, LC3 codec
-├── API/               SSEParser
+├── API/               HermesClient, SSEParser
 ├── Glance/            GlanceService + Sources/
 ├── Platform/          NativeLocation, Settings, NotificationWhitelist
 ├── Models/            EvenaiModel, HistoryStore, NotifyModel

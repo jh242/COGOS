@@ -1,9 +1,7 @@
 import Foundation
 import Combine
 
-/// Compatibility session facade: keeps the SwiftUI/public gesture API stable
-/// while delegating voice capture and G1 text rendering to dedicated Phase 1
-/// components.
+/// Coordinates glasses voice capture, Hermes transport, and G1 text rendering.
 @MainActor
 final class EvenAISession: ObservableObject {
     // MARK: - Published
@@ -12,44 +10,31 @@ final class EvenAISession: ObservableObject {
     @Published var isReceivingAudio = false
     @Published var isSyncing = false
     @Published var dynamicText: String = "Hold the left TouchBar to ask COGOS a question."
-    @Published var mode: SessionMode = .chat
 
     // MARK: - Collaborators
 
     private let voice: VoiceCaptureController
     private let renderer: EvenTextRenderer
-    private let runtime: AgentRuntime
+    private let settings: Settings
     weak var historyStore: HistoryStore?
 
     // MARK: - State
 
     private var lastStartMs: Int = 0
-    private var lastStopMs: Int = 0
     private let startTimeGap = 500
-    private let stopTimeGap = 500
+    private var activeResponseTask: Task<String?, Never>?
+    private var activeTurnID: UUID?
+    private var isStartingCapture = false
 
     init(
         proto: Proto,
         speech: SpeechStreamRecognizer,
-        settings: Settings,
-        agentSource: AgentSource
+        settings: Settings
     ) {
         let renderer = EvenTextRenderer(proto: proto)
         self.voice = VoiceCaptureController(proto: proto, speech: speech, settings: settings)
         self.renderer = renderer
-
-        // Phase 4 canary registry. The same `agentSource` instance is also
-        // registered in `GlanceService.providers`, so notes written by the
-        // tool surface inside the next ~5s tick.
-        let registry = ToolRegistry(tools: [WriteAgentNoteTool()])
-        let toolContext = ToolContext(agentSource: agentSource)
-
-        self.runtime = AgentRuntime(
-            renderer: renderer,
-            toolRegistry: registry,
-            makeToolContext: { toolContext },
-            makeBackend: { settings.makeLLMBackend() }
-        )
+        self.settings = settings
     }
 
     // MARK: - Lifecycle
@@ -59,6 +44,10 @@ final class EvenAISession: ObservableObject {
         if now - lastStartMs < startTimeGap { return }
         lastStartMs = now
 
+        isStartingCapture = true
+        await cancelActiveResponse()
+        guard isStartingCapture else { return }
+        isStartingCapture = false
         clear()
         isReceivingAudio = true
         isRunning = true
@@ -69,47 +58,78 @@ final class EvenAISession: ObservableObject {
                 await self?.recordOverByOS()
             },
             onRecordingTimeout: { [weak self] in
-                self?.handleRecordingTimeout()
+                await self?.recordOverByOS()
             }
         )
     }
 
     func recordOverByOS() async {
-        let now = Int(Date().timeIntervalSince1970 * 1000)
-        if now - lastStopMs < stopTimeGap { return }
-        lastStopMs = now
-
+        guard isReceivingAudio else {
+            isStartingCapture = false
+            return
+        }
         isReceivingAudio = false
         let query = await voice.stop()
-        try? await Task.sleep(nanoseconds: 2_000_000_000)
 
         if query.isEmpty {
             dynamicText = "No speech recognized. Try asking again."
             isSyncing = false
-            await renderer.pushReply("No speech recognized. Try asking again.")
+            await pushOneShot(dynamicText)
             return
         }
 
-        let result = await runtime.handle(
-            .voiceTranscriptFinal(query),
-            shouldContinue: { [weak self] in
-                await MainActor.run { self?.isRunning ?? false }
-            }
-        )
-
-        isSyncing = false
-        if let result {
-            historyStore?.addItem(title: result.userText, content: result.assistantText)
-            dynamicText = "\(result.userText)\n\n\(result.assistantText)"
+        guard let client = settings.makeHermesClient() else {
+            dynamicText = "Set a valid HTTPS Hermes endpoint and token in Settings."
+            isSyncing = false
+            await pushOneShot(dynamicText)
+            return
         }
-    }
 
-    func resetSession() {
-        Task { await runtime.handle(.resetRequested, shouldContinue: { true }) }
+        let turnID = UUID()
+        activeTurnID = turnID
+        let task = Task { @MainActor [weak self] () -> String? in
+            guard let self else { return nil }
+            do {
+                return try await renderer.streamAndDisplay(
+                    client.streamResponse(to: query),
+                    shouldContinue: { [weak self] in
+                        guard let self else { return false }
+                        return self.isRunning && self.activeTurnID == turnID
+                    }
+                )
+            } catch is CancellationError {
+                return nil
+            } catch {
+                guard self.activeTurnID == turnID else { return nil }
+                let message = error.localizedDescription
+                self.dynamicText = message
+                _ = await self.renderer.pushReply(
+                    message,
+                    shouldContinue: { [weak self] in
+                        guard let self else { return false }
+                        return self.isRunning && self.activeTurnID == turnID
+                    }
+                )
+                return nil
+            }
+        }
+        activeResponseTask = task
+        let answer = await task.value
+
+        guard activeTurnID == turnID else { return }
+        activeResponseTask = nil
+        activeTurnID = nil
+        isSyncing = false
+        if let answer, !answer.isEmpty {
+            historyStore?.addItem(title: query, content: answer)
+            dynamicText = "\(query)\n\n\(answer)"
+        }
     }
 
     func stopEvenAIByOS() async {
         isRunning = false
+        isStartingCapture = false
+        await cancelActiveResponse()
         clear()
         await voice.cancel()
     }
@@ -123,7 +143,33 @@ final class EvenAISession: ObservableObject {
         isRunning = false
     }
 
-    private func handleRecordingTimeout() {
-        clear()
+    private func cancelActiveResponse() async {
+        activeTurnID = nil
+        let task = activeResponseTask
+        activeResponseTask = nil
+        task?.cancel()
+        _ = await task?.value
+        isSyncing = false
+    }
+
+    private func pushOneShot(_ text: String) async {
+        let turnID = UUID()
+        activeTurnID = turnID
+        let task = Task { @MainActor [weak self] () -> String? in
+            guard let self else { return nil }
+            _ = await renderer.pushReply(
+                text,
+                shouldContinue: { [weak self] in
+                    guard let self else { return false }
+                    return self.isRunning && self.activeTurnID == turnID
+                }
+            )
+            return nil
+        }
+        activeResponseTask = task
+        _ = await task.value
+        guard activeTurnID == turnID else { return }
+        activeResponseTask = nil
+        activeTurnID = nil
     }
 }

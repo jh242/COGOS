@@ -1,5 +1,9 @@
 # Persistent Agent Refactor Plan: OpenRouter-first COGOS
 
+> Superseded by the Hermes thin-client architecture. Local agent runtime,
+> memory, prompting, and tools have been removed; Hermes now owns them on the
+> VPS through its Responses API.
+
 This document defines the planned refactor from the current `EvenAISession` chat orchestrator into a persistent, OpenRouter-optimized wearable agent runtime.
 
 The goal is not to introduce a generic agent framework. The goal is to make COGOS stateful, tool-capable, persistent across launches, and tuned for Even Realities G1 display constraints while preserving the app's OpenAI-compatible endpoint story.

@@ -9,8 +9,8 @@ This file gives Claude Code the context it needs to work effectively in this rep
 An **iOS-only** Swift / SwiftUI app that turns **Even Realities G1 smart
 glasses** into a wearable AI terminal. The phone connects to the glasses
 over dual BLE (one connection per arm), streams LC3 audio from the glasses
-microphone, transcribes speech via the native iOS Speech framework, calls an
-OpenAI-compatible Chat Completions endpoint, and streams the reply to the
+microphone, transcribes speech via the native iOS Speech framework, sends the
+transcript to a remote Hermes Agent, and streams the reply to the
 glasses waveguide display using the firmware-native 0x54 TEXT command.
 
 Pure Swift / SwiftUI. iOS 26+. Bundle ID: `com.jackhu.cogos`.
@@ -29,7 +29,7 @@ Pure Swift / SwiftUI. iOS 26+. Bundle ID: `com.jackhu.cogos`.
 | Speech-to-text | Apple Speech framework (`SFSpeechRecognizer`, on-device) |
 | Audio format | LC3 codec (C sources under `COGOS/Session/lc3/`) |
 | HTTP client | `URLSession` |
-| AI backend | OpenAI-compatible Chat Completions (user-configured base URL) |
+| AI backend | Remote Hermes Agent Responses API over HTTPS/SSE |
 
 ---
 
@@ -42,7 +42,7 @@ COGOS/
   Protocol/          Proto, EvenAIText54, DashboardProto, QuickNoteProto, CRC32XZ
   Session/           EvenAISession, SpeechStreamRecognizer,
                      PcmConverter, LC3 codec (C)
-  API/               ChatCompletionsClient, SSEParser
+  API/               HermesClient, SSEParser
   Glance/            GlanceService + Sources/ (location, calendar, weather,
                      news, transit, notifications)
   Platform/          NativeLocation, Settings, NotificationWhitelist
@@ -127,37 +127,23 @@ Max payload per chunk: 100 bytes. ACK: `54 0A 00 <seq> <sub> <count> 00 <idx> 00
 [Release]       → 0xF5 0x18
   → recordOverByOS()
      → proto.micOff()
-     → settings.makeChatClient().stream(...)
+     → settings.makeHermesClient().streamResponse(...)
      → proto.sendEvenAITextPrepare() then cumulative proto.sendEvenAIText(...)
 [Double-tap]    → 0xF5 0x20 → appState.exitAll() + session.clear()
 ```
 
 ---
 
-## LLM API (ChatCompletionsClient.swift)
+## Hermes API (`HermesClient.swift`)
 
-Backend-agnostic. `OpenAICompatibleClient` hits any OpenAI-compatible
-`POST {baseURL}/chat/completions` endpoint with `stream: true`. Base URL,
-model, and API key live in `Settings` (UserDefaults keys `llm_base_url`,
-`llm_model`, `llm_api_key`). Env override: `LLM_API_KEY`.
+The app is a thin client for `POST /v1/responses`. It sends the final speech
+transcript, a stable named conversation, and a short display-format hint.
+Hermes owns prompts, model selection, memory, tools, skills, and tool loops.
+The app ignores tool-progress events and renders only cumulative final-text
+snapshots. Glance providers remain local and are never uploaded to Hermes.
 
-SSE parsed by `SSEParser.swift`; client extracts `choices[0].delta.content`.
-
----
-
-## Session modes
-
-Three modes exist in `SessionMode.swift` (`chat`, `code`), triggered by
-triple-tap gestures. System-prompt differentiation per mode is not yet
-implemented — the base client uses a single concise-answer prompt.
-
----
-
-## Wake word
-
-- Phrases detected client-side in the partial STT transcript.
-- Default list: `["hey claude", "ok claude", "claude"]`
-- Wake phrase is stripped from the query before sending to the API.
+The HTTPS endpoint is stored in `UserDefaults`; the bearer token is stored in
+Keychain. Scheme overrides are `HERMES_API_URL` and `HERMES_API_KEY`.
 
 ---
 
@@ -171,8 +157,7 @@ implemented — the base client uses a single concise-answer prompt.
   pagination; phone never splits into pages.
 - Actor isolation: `Proto` and `BleRequestQueue` are actors; call with `await`.
 - `EvenAISession.clear()` resets all state — call on every exit path.
-- API keys live in `UserDefaults` via `Settings.swift` or Xcode scheme env
-  (`LLM_API_KEY`); never commit them.
+- The Hermes token lives in Keychain or `HERMES_API_KEY`; never commit it.
 
 ---
 
@@ -191,5 +176,5 @@ LE accessories. Requires a physical iOS device (BLE cannot be simulated).
 3. `COGOS/BLE/BleRequestQueue.swift` — request/response + sendBoth sequencing
 4. `COGOS/Protocol/Proto.swift` — command helpers, packet assemblers
 5. `COGOS/Protocol/EvenAIText54.swift` — 0x54 streaming text encoder
-6. `COGOS/API/ChatCompletionsClient.swift` — OpenAI-compatible LLM abstraction
+6. `COGOS/API/HermesClient.swift` — Hermes Responses API transport
 7. `COGOS/App/AppState.swift` — top-level wiring

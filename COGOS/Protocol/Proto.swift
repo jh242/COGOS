@@ -38,12 +38,13 @@ actor Proto {
     /// updates. Reserves + returns the seq used for this message's
     /// subsequent text packets.
     @discardableResult
-    func sendEvenAITextPrepare(timeoutMs: Int = 1500) async -> UInt8 {
+    func sendEvenAITextPrepare(timeoutMs: Int = 1500) async -> UInt8? {
         let seq = textSeq
         textSeq = textSeq &+ 1
         let pack = EvenAIText54.preparePacket(seq: seq)
-        _ = await queue.request(pack, lr: "L", timeoutMs: timeoutMs)
-        _ = await queue.request(pack, lr: "R", timeoutMs: timeoutMs)
+        guard isEvenAITextAck(await queue.request(pack, lr: "L", timeoutMs: timeoutMs), matching: pack),
+              !Task.isCancelled else { return nil }
+        guard isEvenAITextAck(await queue.request(pack, lr: "R", timeoutMs: timeoutMs), matching: pack) else { return nil }
         return seq
     }
 
@@ -76,10 +77,24 @@ actor Proto {
         }
         let packets = EvenAIText54.textPackets(seq: seq, text: text, status: status)
         for pack in packets {
-            if await queue.request(pack, lr: "L", timeoutMs: timeoutMs) == nil { return false }
-            if await queue.request(pack, lr: "R", timeoutMs: timeoutMs) == nil { return false }
+            if Task.isCancelled { return false }
+            if !isEvenAITextAck(await queue.request(pack, lr: "L", timeoutMs: timeoutMs), matching: pack) { return false }
+            if Task.isCancelled { return false }
+            if !isEvenAITextAck(await queue.request(pack, lr: "R", timeoutMs: timeoutMs), matching: pack) { return false }
         }
         return true
+    }
+
+    private func isEvenAITextAck(_ packet: BluetoothManager.ReceivedPacket?, matching request: Data) -> Bool {
+        guard let data = packet?.data,
+              data.count >= 10,
+              request.count >= 8 else { return false }
+        return data[0] == 0x54
+            && data[3] == request[3]
+            && data[4] == request[4]
+            && data[5] == request[5]
+            && data[7] == request[7]
+            && data[9] == 0xC9
     }
 
     // MARK: - Settings / control

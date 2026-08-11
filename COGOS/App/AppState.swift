@@ -15,7 +15,6 @@ final class AppState: ObservableObject {
     let glance: GlanceService
     let location: NativeLocation
     let speech: SpeechStreamRecognizer
-    let agentSource: AgentSource
 
     private var cancellables: Set<AnyCancellable> = []
     private var started = false
@@ -29,18 +28,15 @@ final class AppState: ObservableObject {
         let whitelist = NotificationWhitelist()
         let requestQueue = BleRequestQueue(bluetooth: bluetooth)
         let proto = Proto(queue: requestQueue)
-        let agentSource = AgentSource()
         let session = EvenAISession(
             proto: proto,
             speech: speech,
-            settings: settings,
-            agentSource: agentSource
+            settings: settings
         )
         let glance = GlanceService(
             proto: proto,
             location: location,
-            settings: settings,
-            agentSource: agentSource
+            settings: settings
         )
         let gestureRouter = GestureRouter(session: session, settings: settings, bluetooth: bluetooth)
 
@@ -55,7 +51,6 @@ final class AppState: ObservableObject {
         self.session = session
         self.glance = glance
         self.gestureRouter = gestureRouter
-        self.agentSource = agentSource
 
         session.historyStore = history
         bluetooth.speechRecognizer = speech
@@ -113,6 +108,9 @@ final class AppState: ObservableObject {
         case .disconnected, .scanning, .connecting:
             glance.stopTimer()
             location.stopUpdates()
+            if session.isRunning || session.isSyncing {
+                session.exitAll()
+            }
         }
     }
 

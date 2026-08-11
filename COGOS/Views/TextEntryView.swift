@@ -34,8 +34,10 @@ At Even Realities we continuously explore the human relationship with technology
     private func sendToGlasses() {
         let snapshot = text
         Task {
-            _ = await appState.proto.sendEvenAITextPrepare()
-            _ = await appState.proto.sendEvenAIText("\n\n" + snapshot)
+            guard let seq = await appState.proto.sendEvenAITextPrepare() else { return }
+            let formatted = "\n\n" + snapshot + "\n"
+            _ = await appState.proto.sendEvenAIText(formatted, seq: seq)
+            _ = await appState.proto.sendEvenAITextComplete(formatted, seq: seq)
         }
     }
 }

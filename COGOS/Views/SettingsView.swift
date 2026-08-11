@@ -3,28 +3,35 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var settings: Settings
     @EnvironmentObject var appState: AppState
+    @State private var hermesStatus: String?
+    @State private var isCheckingHermes = false
 
     var body: some View {
         Form {
             Section {
-                TextField("Base URL", text: $settings.baseURL)
+                TextField("Hermes API URL", text: $settings.hermesURL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                TextField("Model", text: $settings.model)
+                SecureField("Access token", text: $settings.hermesToken)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                SecureField("API Key", text: $settings.apiKey)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Toggle("Stream responses", isOn: $settings.useStreaming)
-                Stepper(value: $settings.maxOutputTokens, in: 128...4096, step: 128) {
-                    LabeledContent("Max output", value: "\(settings.maxOutputTokens) tokens")
+                Button(isCheckingHermes ? "Checking..." : "Test connection") {
+                    testHermesConnection()
+                }
+                .disabled(isCheckingHermes || settings.makeHermesClient() == nil)
+                if let hermesStatus {
+                    Text(hermesStatus)
+                        .foregroundStyle(.secondary)
+                }
+                if let error = settings.hermesCredentialError {
+                    Text(error)
+                        .foregroundStyle(.red)
                 }
             } header: {
-                Text("Assistant Endpoint")
+                Text("Hermes Agent")
             } footer: {
-                Text("OpenRouter is the default. Any OpenAI-compatible chat completions base URL still works.")
+                Text("Requires an HTTPS Hermes API server. The access token is stored in Keychain; model, memory, and tools are controlled by Hermes.")
             }
 
             Section {
@@ -99,6 +106,21 @@ struct SettingsView: View {
                 level: settings.brightness,
                 auto: settings.autoBrightness
             )
+        }
+    }
+
+    private func testHermesConnection() {
+        guard let client = settings.makeHermesClient() else { return }
+        isCheckingHermes = true
+        hermesStatus = nil
+        Task {
+            do {
+                try await client.checkConnection()
+                hermesStatus = "Connected"
+            } catch {
+                hermesStatus = error.localizedDescription
+            }
+            isCheckingHermes = false
         }
     }
 }

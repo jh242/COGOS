@@ -3,8 +3,8 @@
 An iOS app that turns **Even Realities G1 smart glasses** into a wearable
 AI terminal. The phone connects to the glasses over dual BLE (one
 connection per arm), streams LC3 audio from the glasses microphone,
-transcribes speech with the native iOS Speech framework, calls an
-OpenAI-compatible Chat Completions endpoint, and streams the reply to
+transcribes speech with the native iOS Speech framework, sends the transcript
+to a remote Hermes Agent, and streams the reply to
 the waveguide display using the firmware-native 0x54 TEXT command.
 
 Pure Swift / SwiftUI. iOS 26+. Bundle ID: `com.jackhu.cogos`.
@@ -15,12 +15,12 @@ See [`COGOS/README.md`](COGOS/README.md) for Xcode project setup.
 The `.xcodeproj` is regenerated from `project.yml` via
 [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
-## API
+## Hermes Agent
 
-The LLM endpoint is user-configurable — any OpenAI-compatible
-`/v1/chat/completions` server will do. Set base URL, model, and API key
-in the in-app Settings screen (persisted to `UserDefaults`), or export
-`LLM_API_KEY` in the Xcode scheme.
+Enable Hermes' API server and expose it through HTTPS. Set its URL and bearer
+token in the in-app Settings screen, or export `HERMES_API_URL` and
+`HERMES_API_KEY` in the Xcode scheme. The app sends only final speech
+transcripts; Hermes owns all model, memory, tool, and agent behavior.
 
 Weather uses Apple WeatherKit (entitlement required). News glance uses
 Google News RSS; headlines are truncated to their first few words for the

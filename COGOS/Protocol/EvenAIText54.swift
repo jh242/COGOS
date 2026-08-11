@@ -32,6 +32,7 @@ enum EvenAIText54 {
     /// Max UTF-8 bytes per chunk. Observed max packet length is ~0x70 (112
     /// bytes); header is 12 bytes so payload ≤ 100 bytes.
     static let maxChunkPayload = 100
+    static let maxTextPayload = maxChunkPayload * Int(UInt8.max)
 
     /// Byte-11 state values observed in Even app captures:
     /// - `0xFF` while the reply is still arriving (firmware keeps viewport
@@ -57,7 +58,7 @@ enum EvenAIText54 {
     /// byte 11 — use `.complete` only for the final re-send that enables
     /// native scroll.
     static func textPackets(seq: UInt8, text: String, status: Status = .streaming) -> [Data] {
-        let payload = Data(text.utf8)
+        let payload = text.utf8Truncated(max: maxTextPayload)
         if payload.isEmpty {
             return [headerOnlyText(seq: seq, chunkCount: 1, chunkIndex: 1, status: status)]
         }
@@ -72,8 +73,8 @@ enum EvenAIText54 {
             var pack = Data([
                 0x54, UInt8(totalLen & 0xFF), 0x00,
                 seq, 0x03,
-                UInt8(chunkCount & 0xFF), 0x00,
-                UInt8((i + 1) & 0xFF), 0x00,
+                UInt8(chunkCount), 0x00,
+                UInt8(i + 1), 0x00,
                 0x00, 0x00, status.rawValue
             ])
             pack.append(slice)
