@@ -228,13 +228,32 @@ actor Proto {
 
     // MARK: - Whitelist / Notifications
 
-    func sendNewAppWhiteListJson(_ json: String) async {
+    @discardableResult
+    func sendNewAppWhiteListJson(_ json: String) async -> Bool {
         let payload = Data(json.utf8)
+        guard !payload.isEmpty else { return false }
         let packets = Self.getPackList(cmd: 0x04, data: payload, count: 180)
         for _ in 0..<3 {
             let ok = await queue.requestList(packets, lr: "L", timeoutMs: 300)
-            if ok { return }
+            if ok { return true }
         }
+        return false
+    }
+
+    /// Configure whether a new notification wakes the HUD and how long it
+    /// remains visible. Firmware expects this setting on both arms.
+    @discardableResult
+    func setNotificationAutoDisplay(enabled: Bool, timeoutSeconds: Int) async -> Bool {
+        let packet = Self.notificationAutoDisplayPacket(
+            enabled: enabled,
+            timeoutSeconds: timeoutSeconds
+        )
+        return await queue.sendBoth(packet, timeoutMs: 1000, retry: 2)
+    }
+
+    static func notificationAutoDisplayPacket(enabled: Bool, timeoutSeconds: Int) -> Data {
+        let timeout = UInt8(max(1, min(255, timeoutSeconds)))
+        return Data([0x4F, enabled ? 0x01 : 0x00, timeout])
     }
 
     func sendNotify(appData: [String: Any], notifyId: UInt8, retry: Int = 6) async {

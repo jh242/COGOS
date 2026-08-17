@@ -8,11 +8,22 @@ struct NotificationSettingsView: View {
     var body: some View {
         Form {
             Section {
+                Toggle("Calls", isOn: $whitelist.callsEnabled)
+                Toggle("Messages", isOn: $whitelist.messagesEnabled)
+                Toggle("Mail", isOn: $whitelist.mailEnabled)
+                Toggle("Calendar", isOn: $whitelist.calendarEnabled)
+            } header: {
+                Text("Apple Notifications")
+            } footer: {
+                Text("These categories are delivered directly to the glasses through Apple Notification Center Service (ANCS).")
+            }
+
+            Section {
                 if whitelist.appIds.isEmpty {
                     ContentUnavailableView {
-                        Label("All Apps Allowed", systemImage: "bell")
+                        Label("No Third-Party Apps", systemImage: "bell.slash")
                     } description: {
-                        Text("Add app bundle identifiers if you only want notifications from specific apps forwarded to your glasses.")
+                        Text("Add each app you want the glasses to accept.")
                     }
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
@@ -35,9 +46,9 @@ struct NotificationSettingsView: View {
                     }
                 }
             } header: {
-                Text("Forwarded Apps")
+                Text("Third-Party Apps")
             } footer: {
-                Text("Leave the list empty to forward notifications from all apps.")
+                Text("The glasses firmware uses an explicit allowlist. An empty list blocks third-party apps.")
             }
 
             Section {
@@ -57,13 +68,42 @@ struct NotificationSettingsView: View {
             }
 
             Section {
+                Toggle("Show on arrival", isOn: $whitelist.autoDisplayEnabled)
+                Stepper(
+                    "Display for \(whitelist.displayTimeoutSeconds) seconds",
+                    value: $whitelist.displayTimeoutSeconds,
+                    in: 1...30
+                )
+                .disabled(!whitelist.autoDisplayEnabled)
+            } header: {
+                Text("Display")
+            } footer: {
+                Text("When disabled, notifications remain available from the glasses notification viewer without interrupting the current screen.")
+            }
+
+            Section {
                 Button {
-                    Task { await whitelist.pushToGlasses(proto: appState.proto) }
+                    sync()
                 } label: {
-                    Label("Sync Notification Settings", systemImage: "arrow.triangle.2.circlepath")
+                    if whitelist.isSyncing {
+                        HStack {
+                            ProgressView()
+                            Text("Syncing…")
+                        }
+                    } else {
+                        Label("Sync Notification Settings", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                }
+                .disabled(!appState.bluetooth.isConnected || whitelist.isSyncing)
+
+                if let status = whitelist.syncStatus {
+                    Text(status)
+                        .foregroundStyle(status.hasPrefix("Synced") ? Color.green : Color.gray)
                 }
             } footer: {
-                Text("COGOS also syncs this list when your glasses connect.")
+                Text(appState.bluetooth.isConnected
+                     ? "COGOS also syncs these settings after both glasses arms are fully ready."
+                     : "Connect both glasses arms before syncing. iOS may ask permission to share notifications during the first ANCS connection.")
             }
         }
         .navigationTitle("Notifications")
@@ -78,9 +118,20 @@ struct NotificationSettingsView: View {
         guard !id.isEmpty, !whitelist.appIds.contains(id) else { return }
         whitelist.set(whitelist.appIds + [id])
         newAppId = ""
+        syncIfConnected()
     }
 
     private func remove(_ id: String) {
         whitelist.set(whitelist.appIds.filter { $0 != id })
+        syncIfConnected()
+    }
+
+    private func syncIfConnected() {
+        guard appState.bluetooth.isConnected else { return }
+        sync()
+    }
+
+    private func sync() {
+        Task { await whitelist.pushToGlasses(proto: appState.proto) }
     }
 }

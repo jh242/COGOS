@@ -63,7 +63,10 @@ final class BluetoothManager: NSObject, ObservableObject {
     private var discoveredPairs: [String: (CBPeripheral?, CBPeripheral?)] = [:]
 
     // Currently paired/connecting device
-    private var currentConnectingDeviceName: String?
+    /// Kept for the lifetime of the pairing so an automatic reconnect can
+    /// complete the same readiness flow as the initial connection.
+    private var currentDeviceName: String?
+    private var shouldReconnect = true
     private var leftPeripheral: CBPeripheral?
     private var rightPeripheral: CBPeripheral?
     private var leftUUIDStr: String?
@@ -72,6 +75,8 @@ final class BluetoothManager: NSObject, ObservableObject {
     private var rightWChar: CBCharacteristic?
     private var leftRChar: CBCharacteristic?
     private var rightRChar: CBCharacteristic?
+    private var leftUARTReady = false
+    private var rightUARTReady = false
 
     // Pending auto-reconnect if bluetooth isn't on yet
     private var pendingReconnect: (() -> Void)?
@@ -91,6 +96,7 @@ final class BluetoothManager: NSObject, ObservableObject {
             print("BluetoothManager: cannot scan; BT state = \(centralManager.state.rawValue)")
             return
         }
+        shouldReconnect = false
         connectionState = .scanning
         status = "Scanning..."
         centralManager.scanForPeripherals(withServices: nil, options: nil)
@@ -110,12 +116,15 @@ final class BluetoothManager: NSObject, ObservableObject {
         }
         connectionState = .connecting
         status = "Connecting..."
-        currentConnectingDeviceName = deviceName
-        centralManager.connect(left, options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true])
-        centralManager.connect(right, options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true])
+        currentDeviceName = deviceName
+        shouldReconnect = true
+        resetTransportState()
+        centralManager.connect(left, options: connectionOptions(requiresANCS: true))
+        centralManager.connect(right, options: connectionOptions(requiresANCS: false))
     }
 
     func disconnect() {
+        shouldReconnect = false
         if let l = leftPeripheral { centralManager.cancelPeripheralConnection(l) }
         if let r = rightPeripheral { centralManager.cancelPeripheralConnection(r) }
     }
@@ -155,12 +164,37 @@ final class BluetoothManager: NSObject, ObservableObject {
         }
         guard let left = foundLeft, let right = foundRight else { return false }
         discoveredPairs[deviceName] = (left, right)
-        currentConnectingDeviceName = deviceName
+        currentDeviceName = deviceName
+        shouldReconnect = true
+        resetTransportState()
         connectionState = .connecting
         status = "Connecting..."
-        centralManager.connect(left, options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true])
-        centralManager.connect(right, options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true])
+        centralManager.connect(left, options: connectionOptions(requiresANCS: true))
+        centralManager.connect(right, options: connectionOptions(requiresANCS: false))
         return true
+    }
+
+    /// The left arm owns notification storage/rendering, so it is the arm
+    /// that declares ANCS as a connection requirement to iOS.
+    private func connectionOptions(requiresANCS: Bool) -> [String: Any] {
+        var options: [String: Any] = [
+            CBConnectPeripheralOptionNotifyOnDisconnectionKey: true
+        ]
+        if requiresANCS {
+            options[CBConnectPeripheralOptionRequiresANCS] = true
+        }
+        return options
+    }
+
+    private func resetTransportState() {
+        leftPeripheral = nil
+        rightPeripheral = nil
+        leftWChar = nil
+        rightWChar = nil
+        leftRChar = nil
+        rightRChar = nil
+        leftUARTReady = false
+        rightUARTReady = false
     }
 
     // MARK: - Writing
@@ -237,7 +271,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        guard let deviceName = currentConnectingDeviceName,
+        guard let deviceName = currentDeviceName,
               let pair = discoveredPairs[deviceName] else { return }
 
         if pair.0 === peripheral {
@@ -252,25 +286,30 @@ extension BluetoothManager: CBCentralManagerDelegate {
             rightUUIDStr = peripheral.identifier.uuidString
         }
 
-        if leftPeripheral != nil, rightPeripheral != nil {
-            DispatchQueue.main.async {
-                self.connectionState = .connected(name: deviceName)
-                self.status = "Connected: \n\(self.leftPeripheral?.name ?? "")\n\(self.rightPeripheral?.name ?? "")"
-            }
-            saveLastConnected(deviceName: deviceName,
-                              leftUUID: leftPeripheral!.identifier.uuidString,
-                              rightUUID: rightPeripheral!.identifier.uuidString)
-            currentConnectingDeviceName = nil
-        }
+        // Do not publish `.connected` here. CoreBluetooth has only completed
+        // the physical link; writes still fail until UART discovery and RX
+        // subscription finish on both arms.
+        status = "Preparing glasses..."
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        // Try to reconnect
-        DispatchQueue.main.async {
-            self.connectionState = .disconnected
-            self.status = "Not connected"
+        let isLeft = peripheral.identifier.uuidString == leftUUIDStr || peripheral === leftPeripheral
+        if isLeft {
+            leftPeripheral = nil
+            leftWChar = nil
+            leftRChar = nil
+            leftUARTReady = false
+        } else {
+            rightPeripheral = nil
+            rightWChar = nil
+            rightRChar = nil
+            rightUARTReady = false
         }
-        central.connect(peripheral, options: nil)
+        connectionState = .disconnected
+        status = shouldReconnect ? "Reconnecting..." : "Not connected"
+        if shouldReconnect {
+            central.connect(peripheral, options: connectionOptions(requiresANCS: isLeft))
+        }
     }
 }
 
@@ -299,11 +338,43 @@ extension BluetoothManager: CBPeripheralDelegate {
 
         if isLeft, let r = leftRChar, leftWChar != nil {
             leftPeripheral?.setNotifyValue(true, for: r)
-            send(Data([0x4d, 0x01]), lr: "L")
         } else if !isLeft, let r = rightRChar, rightWChar != nil {
             rightPeripheral?.setNotifyValue(true, for: r)
-            send(Data([0x4d, 0x01]), lr: "R")
         }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral,
+                    didUpdateNotificationStateFor characteristic: CBCharacteristic,
+                    error: Error?) {
+        guard error == nil,
+              characteristic.uuid == uartRX,
+              characteristic.isNotifying else { return }
+
+        let isLeft = peripheral.identifier.uuidString == leftUUIDStr
+        if isLeft {
+            leftUARTReady = leftWChar != nil
+            _ = send(Data([0x4D, 0x01]), lr: "L")
+        } else {
+            rightUARTReady = rightWChar != nil
+            _ = send(Data([0x4D, 0x01]), lr: "R")
+        }
+        publishConnectedIfReady()
+    }
+
+    private func publishConnectedIfReady() {
+        guard leftUARTReady,
+              rightUARTReady,
+              let deviceName = currentDeviceName,
+              let leftPeripheral,
+              let rightPeripheral else { return }
+
+        connectionState = .connected(name: deviceName)
+        status = "Connected: \n\(leftPeripheral.name ?? "")\n\(rightPeripheral.name ?? "")"
+        saveLastConnected(
+            deviceName: deviceName,
+            leftUUID: leftPeripheral.identifier.uuidString,
+            rightUUID: rightPeripheral.identifier.uuidString
+        )
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {

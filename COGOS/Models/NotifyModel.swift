@@ -9,17 +9,37 @@ struct NotifyAppModel: Codable, Hashable {
 
 struct NotifyWhitelistModel: Codable {
     let apps: [NotifyAppModel]
+    let calendarEnabled: Bool
+    let callsEnabled: Bool
+    let messagesEnabled: Bool
+    let mailEnabled: Bool
+
+    init(
+        apps: [NotifyAppModel],
+        calendarEnabled: Bool = true,
+        callsEnabled: Bool = true,
+        messagesEnabled: Bool = true,
+        mailEnabled: Bool = true
+    ) {
+        self.apps = apps
+        self.calendarEnabled = calendarEnabled
+        self.callsEnabled = callsEnabled
+        self.messagesEnabled = messagesEnabled
+        self.mailEnabled = mailEnabled
+    }
 
     /// Serialized shape expected by the glasses firmware.
     var wireDict: [String: Any] {
         [
-            "calendar_enable": false,
-            "call_enable": false,
-            "msg_enable": false,
-            "ios_mail_enable": false,
+            "calendar_enable": calendarEnabled,
+            "call_enable": callsEnabled,
+            "msg_enable": messagesEnabled,
+            "ios_mail_enable": mailEnabled,
             "app": [
                 "list": apps.map { ["id": $0.id, "name": $0.name] },
-                "enable": true
+                // This field enables the third-party-app allowlist. An
+                // enabled, empty allowlist blocks every third-party app.
+                "enable": !apps.isEmpty
             ]
         ]
     }
