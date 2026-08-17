@@ -37,9 +37,11 @@ struct NotifyWhitelistModel: Codable {
             "ios_mail_enable": mailEnabled,
             "app": [
                 "list": apps.map { ["id": $0.id, "name": $0.name] },
-                // This field enables the third-party-app allowlist. An
-                // enabled, empty allowlist blocks every third-party app.
-                "enable": !apps.isEmpty
+                // This is the firmware's app-notification inbox switch, not
+                // merely a "list is populated" flag. Keep it enabled even
+                // with an empty list so ANCS notifications are retained for
+                // the unread counter and dashboard left-tap viewer.
+                "enable": true
             ]
         ]
     }
