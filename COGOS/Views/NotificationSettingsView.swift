@@ -21,9 +21,9 @@ struct NotificationSettingsView: View {
             Section {
                 if whitelist.appIds.isEmpty {
                     ContentUnavailableView {
-                        Label("No Third-Party Apps", systemImage: "bell.slash")
+                        Label("All Third-Party Apps", systemImage: "bell.badge")
                     } description: {
-                        Text("Add each app you want the glasses to accept.")
+                        Text("No app-specific filters are configured.")
                     }
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
@@ -48,7 +48,7 @@ struct NotificationSettingsView: View {
             } header: {
                 Text("Third-Party Apps")
             } footer: {
-                Text("The glasses firmware uses an explicit allowlist. An empty list blocks third-party apps.")
+                Text("Leave this list empty to keep the glasses notification inbox enabled for all apps, or add bundle identifiers to filter it.")
             }
 
             Section {

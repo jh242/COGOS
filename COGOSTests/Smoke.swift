@@ -7,7 +7,7 @@ final class Smoke: XCTestCase {
 }
 
 final class NotificationProtocolTests: XCTestCase {
-    func testDefaultWhitelistEnablesAppleCategoriesButNotEmptyThirdPartyList() throws {
+    func testDefaultWhitelistKeepsFirmwareInboxEnabledWithEmptyAppList() throws {
         let model = NotifyWhitelistModel(apps: [])
         let data = try XCTUnwrap(model.jsonString().data(using: .utf8))
         let json = try XCTUnwrap(
@@ -19,7 +19,7 @@ final class NotificationProtocolTests: XCTestCase {
         XCTAssertEqual(json["msg_enable"] as? Bool, true)
         XCTAssertEqual(json["ios_mail_enable"] as? Bool, true)
         let app = try XCTUnwrap(json["app"] as? [String: Any])
-        XCTAssertEqual(app["enable"] as? Bool, false)
+        XCTAssertEqual(app["enable"] as? Bool, true)
         XCTAssertEqual((app["list"] as? [[String: String]])?.count, 0)
     }
 
