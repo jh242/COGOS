@@ -1,7 +1,11 @@
 import Foundation
 import UserNotifications
 
-/// Pulls recent delivered notifications from UNUserNotificationCenter.
+/// Pulls recent notifications delivered to COGOS itself.
+///
+/// `UNUserNotificationCenter` cannot read another app's notifications. Phone
+/// notifications reach the glasses directly through ANCS instead; this source
+/// is intentionally not part of GlanceService's provider list.
 /// Eligible when the newest delivered notification is within the last 10
 /// minutes; otherwise `currentNote` is nil.
 final class NotificationSource: ContextProvider {
