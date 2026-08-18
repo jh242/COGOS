@@ -115,8 +115,8 @@ struct SettingsView: View {
         hermesStatus = nil
         Task {
             do {
-                try await client.checkConnection()
-                hermesStatus = "Connected"
+                let report = try await client.checkConnection()
+                hermesStatus = report.statusText
             } catch {
                 hermesStatus = error.localizedDescription
             }

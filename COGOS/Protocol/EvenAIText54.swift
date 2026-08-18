@@ -1,95 +1,88 @@
 import Foundation
 
-/// Encoder for the firmware-native streaming TEXT command (0x54).
+/// Encoder for the firmware-native `0x54` AI text command family.
 ///
-/// Supersedes the legacy 0x4E multi-packet flow. Observed from the official
-/// Even AI app: each AI reply begins with a `prepare` packet, followed by
-/// cumulative text updates (each update carries the entire answer so far).
-/// The firmware appends / replaces the displayed buffer and paginates on
-/// its own — the phone never manages line wrapping or page state.
-///
-/// Header layout (12 bytes, little-endian fields are single-byte):
-/// ```
-/// 0:  0x54                 — cmd
-/// 1:  total_length         — header + payload, ≤ 0xFF
-/// 2:  0x00
-/// 3:  seq                  — one per logical message; all chunks of a
-///                            multi-chunk update share the same seq
-/// 4:  sub                  — 0x02 prepare, 0x03 text
-/// 5:  chunk_count          — total chunks in this update
-/// 6:  0x00
-/// 7:  chunk_index          — 1-based
-/// 8:  0x00
-/// 9:  0x00 (text) / 0x01 (prepare)
-/// 10: 0x00
-/// 11: 0xFF (text body marker) / 0x00 (prepare)
-/// 12+: UTF-8 text           — only for sub=0x03
-/// ```
-///
-/// ACK: glasses reply with `54 0A 00 <seq> <sub> <count> 00 <idx> 00 C9`.
-/// `BleRequestQueue` matches on the first byte, so a generic reply is fine.
+/// Every prepare, text update, scroll update, and close consumes a fresh
+/// sequence number. Only chunks belonging to the same text update share a
+/// sequence number.
 enum EvenAIText54 {
-    /// Max UTF-8 bytes per chunk. Observed max packet length is ~0x70 (112
-    /// bytes); header is 12 bytes so payload ≤ 100 bytes.
     static let maxChunkPayload = 100
     static let maxTextPayload = maxChunkPayload * Int(UInt8.max)
 
-    /// Byte-11 state values observed in Even app captures:
-    /// - `0xFF` while the reply is still arriving (firmware keeps viewport
-    ///    pinned to the bottom)
-    /// - `0x64` (100) on the final re-send of a complete reply — this is
-    ///    what flips firmware into scrollable mode. Without it, single-tap
-    ///    scroll does nothing and the user can only see the last 3 lines.
-    /// - `0x00..0x64` carries a scroll position percentage when the phone
-    ///    is driving scroll from user taps (sub-byte 9 set to 0x01).
-    enum Status: UInt8 {
-        case streaming = 0xFF
-        case complete = 0x64
+    /// The byte-9/byte-11 state carried by a text update.
+    enum TextMode: Equatable, Sendable {
+        /// Reply still fits the viewport; firmware keeps the newest text visible.
+        case streaming
+        /// Reply has exceeded the viewport; the phone sends a sliding window.
+        case passiveScroll
+        /// Completed reply controlled by TouchBar taps. Position is 0...100.
+        case interactive(position: UInt8)
+
+        fileprivate var scrollFlag: UInt8 {
+            switch self {
+            case .streaming, .passiveScroll: return 0x00
+            case .interactive: return 0x01
+            }
+        }
+
+        fileprivate var status: UInt8 {
+            switch self {
+            case .streaming: return 0xFF
+            case .passiveScroll: return 0x64
+            case .interactive(let position): return min(position, 100)
+            }
+        }
     }
 
-    /// Prepare packet. Signals "text incoming" — sent once at the start of
-    /// a reply, before the first text update.
+    /// Opens a new AI reply.
     static func preparePacket(seq: UInt8) -> Data {
         Data([0x54, 0x0C, 0x00, seq, 0x02, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00])
     }
 
-    /// Text-update packets. Splits `text` into ≤100-byte chunks and emits
-    /// one packet per chunk. All share the same `seq`. `status` controls
-    /// byte 11 — use `.complete` only for the final re-send that enables
-    /// native scroll.
-    static func textPackets(seq: UInt8, text: String, status: Status = .streaming) -> [Data] {
+    /// Ends the current reply or interactive viewer.
+    static func closePacket(seq: UInt8) -> Data {
+        Data([0x54, 0x06, 0x00, seq, 0x01, 0x00])
+    }
+
+    /// Encodes one cumulative or windowed text update.
+    static func textPackets(
+        seq: UInt8,
+        text: String,
+        mode: TextMode = .streaming
+    ) -> [Data] {
         let payload = text.utf8Truncated(max: maxTextPayload)
         if payload.isEmpty {
-            return [headerOnlyText(seq: seq, chunkCount: 1, chunkIndex: 1, status: status)]
+            return [headerOnlyText(seq: seq, mode: mode)]
         }
-        let chunkCount = max(1, Int((payload.count + maxChunkPayload - 1) / maxChunkPayload))
+
+        let chunkCount = max(1, (payload.count + maxChunkPayload - 1) / maxChunkPayload)
         var packets: [Data] = []
         packets.reserveCapacity(chunkCount)
-        for i in 0..<chunkCount {
-            let start = i * maxChunkPayload
+
+        for index in 0..<chunkCount {
+            let start = index * maxChunkPayload
             let end = min(start + maxChunkPayload, payload.count)
             let slice = payload.subdata(in: start..<end)
-            let totalLen = 12 + slice.count
-            var pack = Data([
-                0x54, UInt8(totalLen & 0xFF), 0x00,
+            var packet = Data([
+                0x54, UInt8(12 + slice.count), 0x00,
                 seq, 0x03,
                 UInt8(chunkCount), 0x00,
-                UInt8(i + 1), 0x00,
-                0x00, 0x00, status.rawValue
+                UInt8(index + 1), 0x00,
+                mode.scrollFlag, 0x00, mode.status
             ])
-            pack.append(slice)
-            packets.append(pack)
+            packet.append(slice)
+            packets.append(packet)
         }
         return packets
     }
 
-    private static func headerOnlyText(seq: UInt8, chunkCount: Int, chunkIndex: Int, status: Status) -> Data {
+    private static func headerOnlyText(seq: UInt8, mode: TextMode) -> Data {
         Data([
             0x54, 0x0C, 0x00,
             seq, 0x03,
-            UInt8(chunkCount & 0xFF), 0x00,
-            UInt8(chunkIndex & 0xFF), 0x00,
-            0x00, 0x00, status.rawValue
+            0x01, 0x00,
+            0x01, 0x00,
+            mode.scrollFlag, 0x00, mode.status
         ])
     }
 }

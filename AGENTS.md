@@ -77,7 +77,8 @@ Send to L first; only send to R after L acknowledges with `0xC9`.
 | Glasses → App | `0xF1 seq data` | LC3 audio chunk |
 | Glasses → App | `0xF5 0x17` | Long-press: start Even AI |
 | Glasses → App | `0xF5 0x18` | Stop recording |
-| Glasses → App | `0xF5 0x01` | Single tap (firmware paginates; ignore) |
+| Glasses → App | `0xF5 0x00` | Close the active AI scroll viewer |
+| Glasses → App | `0xF5 0x01` | Single tap: L previous page, R next page |
 | Glasses → App | `0xF5 0x02` | Head-up |
 | Glasses → App | `0xF5 0x04/05` | Triple tap (mode cycle) |
 | Glasses → App | `0xF5 0x20` | Double-tap exit |
@@ -89,29 +90,30 @@ Send to L first; only send to R after L acknowledges with `0xC9`.
 0:  0x54
 1:  total length (header + payload)
 2:  0x00
-3:  seq (per logical message; all chunks share it)
+3:  seq (fresh per update; chunks within one update share it)
 4:  sub  — 0x02 prepare, 0x03 text
 5:  chunk_count
 6:  0x00
 7:  chunk_index (1-based)
 8:  0x00
-9:  scroll flag — 0x00 during streaming + initial "done" re-send;
-                 0x01 on phone-driven scroll-position updates (post-done)
+9:  scroll flag — 0x00 for live/passive updates;
+                 0x01 for the completed phone-driven viewer
 10: 0x00
 11: status byte —
       prepare:   0x00
-      streaming: 0xFF (firmware pins viewport to the bottom)
-      complete:  0x64 (100; final re-send — this is what enables the
-                 firmware's native single-tap scroll viewer; without it
-                 the display stays locked to the last 3 lines)
-      0x00..0x64 scroll-position percentage when byte 9 = 0x01
+      streaming: 0xFF while the answer fits the five-line viewport
+      passive:   0x64 after overflow; phone sends the newest five lines
+      interactive: 0x00..0x5A page position when byte 9 = 0x01;
+                   0x64 is the completed viewer's final-page entry
 12+: UTF-8 (sub=0x03 only)
 ```
 
-Each reply: one prepare, then cumulative text updates (every update carries
-the full answer so far, status=0xFF). After the last streaming update, send
-one more cumulative update with status=0x64 — firmware then hands the text
-to its scrollable viewer and single-tap scroll starts working.
+Each reply starts with one prepare. While wrapped content fits five lines,
+send cumulative text with status=0xFF. After overflow, send the newest
+five-line window with status=0x64 as deltas arrive. On completion, enter the
+phone-driven viewer on the final page with byte 9=0x01/status=0x64; F5 01 taps
+send earlier or later five-line pages with positions in 0...90. Short replies
+and viewer exits use sub=0x01 close. Every update consumes a fresh sequence.
 Max payload per chunk: 100 bytes. ACK: `54 0A 00 <seq> <sub> <count> 00 <idx> 00 C9`.
 
 ---
@@ -129,7 +131,9 @@ Max payload per chunk: 100 bytes. ACK: `54 0A 00 <seq> <sub> <count> 00 <idx> 00
      → proto.micOff()
      → settings.makeHermesClient().streamResponse(...)
      → proto.sendEvenAITextPrepare() then cumulative proto.sendEvenAIText(...)
-[Double-tap]    → 0xF5 0x20 → appState.exitAll() + session.clear()
+[Single tap]    → 0xF5 0x01 → long-reply page backward (L) / forward (R)
+[Viewer close]  → 0xF5 0x00 → close + clear the interactive viewer
+[Double-tap]    → 0xF5 0x20 → cancel response, close viewer, clear session
 ```
 
 ---
@@ -153,8 +157,9 @@ Keychain. Scheme overrides are `HERMES_API_URL` and `HERMES_API_KEY`.
   streaming methods send L→R per chunk serially.
 - `Proto.sendEvenAITextPrepare()` + `Proto.sendEvenAIText(_:)` — don't
   hand-roll 0x54 headers; use `EvenAIText54` encoder.
-- Each AI reply is one prepare + N cumulative text updates. Firmware owns
-  pagination; phone never splits into pages.
+- Each AI reply is one prepare + N text updates with a fresh sequence per
+  update. The phone wraps to 55 characters, renders five-line windows, and
+  drives completed-reply navigation from F5 01 L/R taps.
 - Actor isolation: `Proto` and `BleRequestQueue` are actors; call with `await`.
 - `EvenAISession.clear()` resets all state — call on every exit path.
 - The Hermes token lives in Keychain or `HERMES_API_KEY`; never commit it.

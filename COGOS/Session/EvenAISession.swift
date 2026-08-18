@@ -11,6 +11,8 @@ final class EvenAISession: ObservableObject {
     @Published var isSyncing = false
     @Published var dynamicText: String = "Hold the left TouchBar to ask COGOS a question."
 
+    var isScrollViewerActive: Bool { renderer.isScrollViewerActive }
+
     // MARK: - Collaborators
 
     private let voice: VoiceCaptureController
@@ -138,6 +140,14 @@ final class EvenAISession: ObservableObject {
         Task { await stopEvenAIByOS() }
     }
 
+    func advanceScrollPage(arm: String) async {
+        await renderer.navigate(arm: arm)
+    }
+
+    func exitScrollViewer() async {
+        await renderer.exitScrollViewer()
+    }
+
     func clear() {
         isReceivingAudio = false
         isRunning = false
@@ -149,6 +159,7 @@ final class EvenAISession: ObservableObject {
         activeResponseTask = nil
         task?.cancel()
         _ = await task?.value
+        await renderer.reset()
         isSyncing = false
     }
 
