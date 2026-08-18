@@ -206,20 +206,20 @@ struct HomeView: View {
             if session.isSyncing {
                 HStack(spacing: 12) {
                     ProgressView()
-                    Text("Syncing response…")
+                    Text("Receiving response…")
                         .font(.headline)
                     Spacer()
                 }
                 .padding(.vertical, 8)
-            } else {
-                Text(session.dynamicText)
-                    .font(.body)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
+
+            Text(session.dynamicText)
+                .font(.body)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 

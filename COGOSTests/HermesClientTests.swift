@@ -302,6 +302,37 @@ final class HermesClientTests: XCTestCase {
         XCTAssertEqual(sequence.next(), 0x01)
     }
 
+    func testCompletedRequestTimeoutCannotCancelNewerRequestWithSameCommand() async throws {
+        let queue = BleRequestQueue(bluetooth: BluetoothManager())
+        let command = Data([0x54])
+
+        let first = Task {
+            await queue.request(command, lr: "L", timeoutMs: 100)
+        }
+        try await Task.sleep(nanoseconds: 10_000_000)
+        queue.deliver(packet: BluetoothManager.ReceivedPacket(
+            lr: "L",
+            data: Data([0x54, 0xC9]),
+            peripheralId: "test"
+        ))
+        let firstResponse = await first.value
+        XCTAssertNotNil(firstResponse)
+
+        let second = Task {
+            await queue.request(command, lr: "L", timeoutMs: 500)
+        }
+        // The first request's timeout fires while the second request is
+        // pending. It must not remove the second request's continuation.
+        try await Task.sleep(nanoseconds: 150_000_000)
+        queue.deliver(packet: BluetoothManager.ReceivedPacket(
+            lr: "L",
+            data: Data([0x54, 0xC9]),
+            peripheralId: "test"
+        ))
+        let secondResponse = await second.value
+        XCTAssertNotNil(secondResponse)
+    }
+
     func testFiveLineLayoutSwitchesToPassiveWindow() {
         let fiveLines = (1...5).map { "line \($0)" }.joined(separator: "\n")
         let streaming = EvenTextLayout.frame(for: fiveLines)

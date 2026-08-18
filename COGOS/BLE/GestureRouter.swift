@@ -21,9 +21,9 @@ final class GestureRouter {
         let payload = data.count > 2 ? data[2] : 0
 
         switch notifyIndex {
-        case 0x00: // ACTION_DOUBLE_TAP_FOR_EXIT / close scroll viewer
-            if session.isScrollViewerActive {
-                Task { await session.exitScrollViewer() }
+        case 0x00: // ACTION_DOUBLE_TAP_FOR_EXIT / close active text viewer
+            if session.isViewerActive {
+                Task { await session.exitViewer() }
             }
         case 0x01:
             // The phone drives 0x54 scrolling: L = previous, R = next.

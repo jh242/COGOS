@@ -12,6 +12,7 @@ final class EvenAISession: ObservableObject {
     @Published var dynamicText: String = "Hold the left TouchBar to ask COGOS a question."
 
     var isScrollViewerActive: Bool { renderer.isScrollViewerActive }
+    var isViewerActive: Bool { renderer.isViewerActive }
 
     // MARK: - Collaborators
 
@@ -89,11 +90,15 @@ final class EvenAISession: ObservableObject {
 
         let turnID = UUID()
         activeTurnID = turnID
+        dynamicText = "\(query)\n\nWaiting for Hermes…"
         let task = Task { @MainActor [weak self] () -> String? in
             guard let self else { return nil }
             do {
                 return try await renderer.streamAndDisplay(
                     client.streamResponse(to: query),
+                    onSnapshot: { [weak self] snapshot in
+                        self?.dynamicText = "\(query)\n\n\(snapshot)"
+                    },
                     shouldContinue: { [weak self] in
                         guard let self else { return false }
                         return self.isRunning && self.activeTurnID == turnID
@@ -104,14 +109,9 @@ final class EvenAISession: ObservableObject {
             } catch {
                 guard self.activeTurnID == turnID else { return nil }
                 let message = error.localizedDescription
-                self.dynamicText = message
-                _ = await self.renderer.pushReply(
-                    message,
-                    shouldContinue: { [weak self] in
-                        guard let self else { return false }
-                        return self.isRunning && self.activeTurnID == turnID
-                    }
-                )
+                self.dynamicText = "\(query)\n\n\(message)"
+                print("Even AI response failed: \(message)")
+                await self.renderer.reset()
                 return nil
             }
         }
@@ -144,8 +144,8 @@ final class EvenAISession: ObservableObject {
         await renderer.navigate(arm: arm)
     }
 
-    func exitScrollViewer() async {
-        await renderer.exitScrollViewer()
+    func exitViewer() async {
+        await renderer.exitViewer()
     }
 
     func clear() {
