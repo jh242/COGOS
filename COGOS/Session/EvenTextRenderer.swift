@@ -137,6 +137,7 @@ final class EvenTextRenderer {
     private var isNavigating = false
 
     private(set) var isScrollViewerActive = false
+    var isViewerActive: Bool { isDisplayOpen }
 
     init(proto: Proto) {
         self.proto = proto
@@ -144,6 +145,7 @@ final class EvenTextRenderer {
 
     func streamAndDisplay(
         _ snapshots: AsyncThrowingStream<String, Error>,
+        onSnapshot: @escaping (String) -> Void = { _ in },
         shouldContinue: @escaping () async -> Bool
     ) async throws -> String {
         try await beginReply()
@@ -154,6 +156,7 @@ final class EvenTextRenderer {
             try Task.checkCancellation()
             guard await shouldContinue() else { return latest }
             latest = snapshot
+            onSnapshot(snapshot)
             let frame = EvenTextLayout.frame(for: snapshot)
             if frame != lastFrame {
                 guard await proto.sendEvenAIText(frame.text, mode: frame.mode) else {
@@ -211,8 +214,8 @@ final class EvenTextRenderer {
         }
     }
 
-    func exitScrollViewer() async {
-        guard isScrollViewerActive else { return }
+    func exitViewer() async {
+        guard isViewerActive else { return }
         await reset()
     }
 
@@ -239,10 +242,8 @@ final class EvenTextRenderer {
     private func finishReply(_ text: String) async throws {
         let replyPages = EvenTextLayout.pages(for: text)
         guard replyPages.count > 1 else {
-            guard await proto.sendEvenAIClose() else {
-                throw EvenTextRendererError.transportFailed
-            }
-            isDisplayOpen = false
+            // OEM keeps a short final answer visible. Closing here makes the
+            // last update disappear as soon as response.completed follows it.
             return
         }
 

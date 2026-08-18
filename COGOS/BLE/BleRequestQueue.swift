@@ -6,9 +6,14 @@ import Foundation
 /// Requests are keyed by `"<lr><firstByte>"` (e.g. "L25" for heartbeat on L).
 /// When a matching response arrives, the waiting continuation is resumed.
 actor BleRequestQueue {
+    private struct Waiter {
+        let id: UUID
+        let continuation: CheckedContinuation<BluetoothManager.ReceivedPacket?, Never>
+    }
+
     private let bluetooth: BluetoothManager
-    private var waiters: [String: CheckedContinuation<BluetoothManager.ReceivedPacket?, Never>] = [:]
-    private var nextReceive: CheckedContinuation<BluetoothManager.ReceivedPacket?, Never>?
+    private var waiters: [String: Waiter] = [:]
+    private var nextReceive: Waiter?
 
     init(bluetooth: BluetoothManager) {
         self.bluetooth = bluetooth
@@ -22,54 +27,56 @@ actor BleRequestQueue {
     private func _deliver(packet: BluetoothManager.ReceivedPacket) {
         guard !packet.data.isEmpty else { return }
         let key = "\(packet.lr)\(String(format: "%02x", packet.data[0]))"
-        if let cont = waiters.removeValue(forKey: key) {
-            cont.resume(returning: packet)
+        if let waiter = waiters.removeValue(forKey: key) {
+            waiter.continuation.resume(returning: packet)
         }
-        if let cont = nextReceive {
+        if let waiter = nextReceive {
             nextReceive = nil
-            cont.resume(returning: packet)
+            waiter.continuation.resume(returning: packet)
         }
     }
 
     /// Send `data` and wait for a reply. Returns nil on timeout.
     func request(_ data: Data, lr: String, timeoutMs: Int = 1000, useNext: Bool = false) async -> BluetoothManager.ReceivedPacket? {
         let key = "\(lr)\(String(format: "%02x", data[0]))"
+        let waiterID = UUID()
 
         // If a previous waiter exists for the same key, fail it immediately.
         if !useNext, let prev = waiters.removeValue(forKey: key) {
-            prev.resume(returning: nil)
+            prev.continuation.resume(returning: nil)
         }
 
         let result = await withCheckedContinuation { (cont: CheckedContinuation<BluetoothManager.ReceivedPacket?, Never>) in
             if useNext {
                 // Replace any existing nextReceive
-                nextReceive?.resume(returning: nil)
-                nextReceive = cont
+                nextReceive?.continuation.resume(returning: nil)
+                nextReceive = Waiter(id: waiterID, continuation: cont)
             } else {
-                waiters[key] = cont
+                waiters[key] = Waiter(id: waiterID, continuation: cont)
             }
             // Dispatch the write.
             bluetooth.send(data, lr: lr)
 
             // Timeout task
             if timeoutMs > 0 {
-                Task { [key, useNext, timeoutMs] in
+                Task { [key, waiterID, useNext, timeoutMs] in
                     try? await Task.sleep(nanoseconds: UInt64(timeoutMs) * 1_000_000)
-                    await self.timeoutFire(key: key, useNext: useNext)
+                    self.timeoutFire(key: key, waiterID: waiterID, useNext: useNext)
                 }
             }
         }
         return result
     }
 
-    private func timeoutFire(key: String, useNext: Bool) {
+    private func timeoutFire(key: String, waiterID: UUID, useNext: Bool) {
         if useNext {
-            if let cont = nextReceive {
+            if let waiter = nextReceive, waiter.id == waiterID {
                 nextReceive = nil
-                cont.resume(returning: nil)
+                waiter.continuation.resume(returning: nil)
             }
-        } else if let cont = waiters.removeValue(forKey: key) {
-            cont.resume(returning: nil)
+        } else if let waiter = waiters[key], waiter.id == waiterID {
+            waiters.removeValue(forKey: key)
+            waiter.continuation.resume(returning: nil)
         }
     }
 
