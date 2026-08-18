@@ -22,21 +22,41 @@ final class SSEParser {
         while let nlIdx = buffer.firstIndex(of: "\n") {
             let line = String(buffer[..<nlIdx]).trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
             buffer.removeSubrange(...nlIdx)
-            if line.isEmpty {
-                // dispatch
-                if !dataLines.isEmpty || currentEvent != nil {
-                    let data = dataLines.joined(separator: "\n")
-                    events.append(Event(event: currentEvent, data: data))
-                }
-                currentEvent = nil
-                dataLines = []
-            } else if line.hasPrefix("event:") {
-                currentEvent = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-            } else if line.hasPrefix("data:") {
-                dataLines.append(String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces))
-            }
-            // ignore other fields (id:, retry:, comments)
+            consume(line: line, into: &events)
         }
         return events
+    }
+
+    /// Flush a final event when the transport reaches EOF without the optional
+    /// trailing blank line. Some proxies and test transports omit that last
+    /// delimiter even though the event itself arrived in full.
+    func finish() -> [Event] {
+        var events: [Event] = []
+        if !buffer.isEmpty {
+            let line = buffer.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+            buffer = ""
+            consume(line: line, into: &events)
+        }
+        dispatch(into: &events)
+        return events
+    }
+
+    private func consume(line: String, into events: inout [Event]) {
+        if line.isEmpty {
+            dispatch(into: &events)
+        } else if line.hasPrefix("event:") {
+            currentEvent = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)
+        } else if line.hasPrefix("data:") {
+            dataLines.append(String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces))
+        }
+        // Ignore other fields (id:, retry:, comments).
+    }
+
+    private func dispatch(into events: inout [Event]) {
+        if !dataLines.isEmpty || currentEvent != nil {
+            events.append(Event(event: currentEvent, data: dataLines.joined(separator: "\n")))
+        }
+        currentEvent = nil
+        dataLines = []
     }
 }

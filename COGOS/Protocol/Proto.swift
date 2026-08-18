@@ -1,10 +1,25 @@
 import Foundation
 
+/// Small value type so 0x54 sequence rollover remains deterministic and
+/// independently testable.
+struct EvenAITextSequence {
+    private var current: UInt8
+
+    init(startingAt value: UInt8 = 0) {
+        current = value
+    }
+
+    mutating func next() -> UInt8 {
+        defer { current = current &+ 1 }
+        return current
+    }
+}
+
 /// High-level command helpers for the G1 glasses protocol.
 /// Ports `lib/services/proto.dart`.
 actor Proto {
     private let queue: BleRequestQueue
-    private var textSeq: UInt8 = 0
+    private var textSequence = EvenAITextSequence()
     private var dashboardSeq: UInt8 = 0
 
     init(queue: BleRequestQueue) {
@@ -34,55 +49,55 @@ actor Proto {
 
     // MARK: - Even AI data transport (0x54 streaming)
 
-    /// Emit a 0x54 prepare packet — sent once per reply, before any text
-    /// updates. Reserves + returns the seq used for this message's
-    /// subsequent text packets.
+    /// Emit a 0x54 prepare packet. Prepare consumes its own sequence number.
     @discardableResult
-    func sendEvenAITextPrepare(timeoutMs: Int = 1500) async -> UInt8? {
-        let seq = textSeq
-        textSeq = textSeq &+ 1
+    func sendEvenAITextPrepare(timeoutMs: Int = 1500) async -> Bool {
+        let seq = nextTextSeq()
         let pack = EvenAIText54.preparePacket(seq: seq)
         guard isEvenAITextAck(await queue.request(pack, lr: "L", timeoutMs: timeoutMs), matching: pack),
-              !Task.isCancelled else { return nil }
-        guard isEvenAITextAck(await queue.request(pack, lr: "R", timeoutMs: timeoutMs), matching: pack) else { return nil }
-        return seq
+              !Task.isCancelled else { return false }
+        return isEvenAITextAck(
+            await queue.request(pack, lr: "R", timeoutMs: timeoutMs),
+            matching: pack
+        )
     }
 
-    /// Send a cumulative text update. `text` should contain the full answer
-    /// assembled so far — firmware replaces its buffer and paginates.
-    /// If `seq` is provided, it should be the value returned by this reply's
-    /// prepare packet so the whole logical text message shares one sequence.
+    /// Send one cumulative or windowed text update. Every call consumes a new
+    /// sequence; chunks produced by this call share that sequence.
     @discardableResult
-    func sendEvenAIText(_ text: String, seq: UInt8? = nil, timeoutMs: Int = 2000) async -> Bool {
-        await sendEvenAIText54(text, seq: seq, status: .streaming, timeoutMs: timeoutMs)
-    }
-
-    /// Final re-send of the full answer with the "complete" status byte
-    /// (0x64). Without this, firmware stays in streaming mode and single-tap
-    /// page scroll is a no-op. See the `HeldLeftBar_AI_MultiLineWithScroll`
-    /// capture: byte 11 flips `0xFF → 0x64` exactly once, after the last
-    /// streaming chunk, to hand the text off to the scrollable viewer.
-    @discardableResult
-    func sendEvenAITextComplete(_ text: String, seq: UInt8? = nil, timeoutMs: Int = 2000) async -> Bool {
-        await sendEvenAIText54(text, seq: seq, status: .complete, timeoutMs: timeoutMs)
-    }
-
-    private func sendEvenAIText54(_ text: String, seq providedSeq: UInt8?, status: EvenAIText54.Status, timeoutMs: Int) async -> Bool {
-        let seq: UInt8
-        if let providedSeq {
-            seq = providedSeq
-        } else {
-            seq = textSeq
-            textSeq = textSeq &+ 1
-        }
-        let packets = EvenAIText54.textPackets(seq: seq, text: text, status: status)
+    func sendEvenAIText(
+        _ text: String,
+        mode: EvenAIText54.TextMode = .streaming,
+        timeoutMs: Int = 2000
+    ) async -> Bool {
+        let seq = nextTextSeq()
+        let packets = EvenAIText54.textPackets(seq: seq, text: text, mode: mode)
         for pack in packets {
             if Task.isCancelled { return false }
-            if !isEvenAITextAck(await queue.request(pack, lr: "L", timeoutMs: timeoutMs), matching: pack) { return false }
+            guard isEvenAITextAck(
+                await queue.request(pack, lr: "L", timeoutMs: timeoutMs),
+                matching: pack
+            ) else { return false }
             if Task.isCancelled { return false }
-            if !isEvenAITextAck(await queue.request(pack, lr: "R", timeoutMs: timeoutMs), matching: pack) { return false }
+            guard isEvenAITextAck(
+                await queue.request(pack, lr: "R", timeoutMs: timeoutMs),
+                matching: pack
+            ) else { return false }
         }
         return true
+    }
+
+    /// Close the current AI reply or interactive scroll viewer.
+    @discardableResult
+    func sendEvenAIClose(timeoutMs: Int = 1500) async -> Bool {
+        let pack = EvenAIText54.closePacket(seq: nextTextSeq())
+        guard await queue.request(pack, lr: "L", timeoutMs: timeoutMs) != nil,
+              !Task.isCancelled else { return false }
+        return await queue.request(pack, lr: "R", timeoutMs: timeoutMs) != nil
+    }
+
+    private func nextTextSeq() -> UInt8 {
+        textSequence.next()
     }
 
     private func isEvenAITextAck(_ packet: BluetoothManager.ReceivedPacket?, matching request: Data) -> Bool {

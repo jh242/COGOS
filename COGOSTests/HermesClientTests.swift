@@ -50,7 +50,7 @@ final class HermesClientTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "X-Hermes-Session-Key"), "cogos-test")
         XCTAssertNotNil(request.value(forHTTPHeaderField: "Idempotency-Key"))
 
-        let bodyData = try XCTUnwrap(request.httpBody)
+        let bodyData = try XCTUnwrap(requestBox.getBody())
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
         XCTAssertEqual(body["input"] as? String, "Hi")
         XCTAssertEqual(body["conversation"] as? String, "conversation-test")
@@ -127,13 +127,111 @@ final class HermesClientTests: XCTestCase {
         let requestBox = RequestBox()
         MockURLProtocol.handler = { request in
             requestBox.set(request)
-            return Self.response(for: request, status: 200, body: "{}")
+            switch request.url?.path {
+            case "/v1/health":
+                return Self.response(for: request, status: 200, body: #"{"status":"ok","version":"0.19.1"}"#)
+            case "/v1/capabilities":
+                return Self.response(
+                    for: request,
+                    status: 200,
+                    body: #"{"object":"hermes.api_server.capabilities","features":{"responses_api":true}}"#
+                )
+            case "/v1/responses":
+                return Self.streamingProbeResponse(for: request)
+            default:
+                return Self.response(for: request, status: 404, body: "")
+            }
         }
 
-        try await makeClient(baseURL: URL(string: "https://hermes.example")!).checkConnection()
-        let request = try XCTUnwrap(requestBox.get())
-        XCTAssertEqual(request.url?.absoluteString, "https://hermes.example/v1/capabilities")
-        XCTAssertEqual(request.httpMethod, "GET")
+        let report = try await makeClient(baseURL: URL(string: "https://hermes.example")!).checkConnection()
+        XCTAssertEqual(report.version, "0.19.1")
+        XCTAssertEqual(report.streaming, .verified)
+        XCTAssertEqual(report.statusText, "Connected — streaming verified (Hermes 0.19.1)")
+
+        let requests = requestBox.getAll()
+        let capabilities = try XCTUnwrap(requests.first { $0.url?.path == "/v1/capabilities" })
+        XCTAssertEqual(capabilities.httpMethod, "GET")
+        XCTAssertEqual(capabilities.value(forHTTPHeaderField: "Accept"), "application/json")
+
+        let probe = try XCTUnwrap(requests.first { $0.url?.path == "/v1/responses" })
+        XCTAssertEqual(probe.value(forHTTPHeaderField: "Accept"), "text/event-stream")
+        let bodyData = try XCTUnwrap(requestBox.body(forPath: "/v1/responses"))
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+        XCTAssertEqual(body["store"] as? Bool, false)
+        XCTAssertEqual(body["stream"] as? Bool, true)
+        XCTAssertTrue((body["conversation"] as? String)?.hasPrefix("cogos-stream-probe-") == true)
+    }
+
+    func testConnectionCheckReportsBufferedResponse() async throws {
+        MockURLProtocol.handler = { request in
+            switch request.url?.path {
+            case "/v1/health":
+                return Self.response(for: request, status: 200, body: #"{"version":"0.19.1"}"#)
+            case "/v1/capabilities":
+                return Self.response(
+                    for: request,
+                    status: 200,
+                    body: #"{"features":{"responses_api":true}}"#
+                )
+            default:
+                return Self.response(
+                    for: request,
+                    status: 200,
+                    body: """
+                    event: response.output_text.delta
+                    data: {"type":"response.output_text.delta","delta":"1 "}
+
+                    event: response.output_text.delta
+                    data: {"type":"response.output_text.delta","delta":"2"}
+
+                    event: response.completed
+                    data: {"type":"response.completed","response":{"output":[]}}
+
+                    """
+                )
+            }
+        }
+
+        let report = try await makeClient().checkConnection()
+        XCTAssertEqual(report.streaming, .buffered)
+        XCTAssertTrue(report.statusText.contains("appear buffered"))
+    }
+
+    func testConnectionCheckRejectsNonHermesSuccessResponse() async {
+        MockURLProtocol.handler = { request in
+            Self.response(for: request, status: 200, body: #"{"status":"ok"}"#)
+        }
+
+        do {
+            _ = try await makeClient().checkConnection()
+            XCTFail("Expected incompatible server failure")
+        } catch let error as HermesClientError {
+            guard case .incompatibleServer = error else {
+                return XCTFail("Unexpected Hermes error: \(error)")
+            }
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testSurfacesHermesErrorMessageFromResponseBody() async {
+        MockURLProtocol.handler = { request in
+            Self.response(
+                for: request,
+                status: 400,
+                body: #"{"error":{"message":"Missing 'input' field","type":"invalid_request_error"}}"#
+            )
+        }
+
+        do {
+            for try await _ in makeClient().streamResponse(to: "Hi") {}
+            XCTFail("Expected request failure")
+        } catch let error as HermesHTTPError {
+            XCTAssertEqual(error.statusCode, 400)
+            XCTAssertEqual(error.localizedDescription, "Missing 'input' field")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
     }
 
     func testCancellingConsumerCancelsURLRequest() async {
@@ -166,6 +264,92 @@ final class HermesClientTests: XCTestCase {
         XCTAssertEqual(packets.last?[7], 255)
     }
 
+    func testTextEncoderUsesTypedModesAndClosePacket() {
+        XCTAssertEqual(
+            EvenAIText54.preparePacket(seq: 0x10),
+            Data([0x54, 0x0C, 0x00, 0x10, 0x02, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00])
+        )
+        XCTAssertEqual(
+            EvenAIText54.closePacket(seq: 0x11),
+            Data([0x54, 0x06, 0x00, 0x11, 0x01, 0x00])
+        )
+
+        let streaming = EvenAIText54.textPackets(seq: 1, text: "a", mode: .streaming)[0]
+        XCTAssertEqual(streaming[9], 0)
+        XCTAssertEqual(streaming[11], 0xFF)
+
+        let passive = EvenAIText54.textPackets(seq: 2, text: "a", mode: .passiveScroll)[0]
+        XCTAssertEqual(passive[9], 0)
+        XCTAssertEqual(passive[11], 100)
+
+        let interactive = EvenAIText54.textPackets(seq: 3, text: "a", mode: .interactive(position: 45))[0]
+        XCTAssertEqual(interactive[9], 1)
+        XCTAssertEqual(interactive[11], 45)
+    }
+
+    func testMultiChunkTextUpdateSharesSequence() {
+        let packets = EvenAIText54.textPackets(seq: 0xFE, text: String(repeating: "a", count: 201))
+        XCTAssertEqual(packets.count, 3)
+        XCTAssertTrue(packets.allSatisfy { $0[3] == 0xFE })
+        XCTAssertEqual(packets.map { $0[7] }, [1, 2, 3])
+    }
+
+    func testTextSequenceRollsOverAfterEveryLogicalUpdate() {
+        var sequence = EvenAITextSequence(startingAt: 0xFE)
+        XCTAssertEqual(sequence.next(), 0xFE)
+        XCTAssertEqual(sequence.next(), 0xFF)
+        XCTAssertEqual(sequence.next(), 0x00)
+        XCTAssertEqual(sequence.next(), 0x01)
+    }
+
+    func testFiveLineLayoutSwitchesToPassiveWindow() {
+        let fiveLines = (1...5).map { "line \($0)" }.joined(separator: "\n")
+        let streaming = EvenTextLayout.frame(for: fiveLines)
+        XCTAssertEqual(streaming.mode, .streaming)
+        XCTAssertTrue(streaming.text.hasPrefix("\n\nline 1"))
+
+        let sixLines = fiveLines + "\nline 6"
+        let passive = EvenTextLayout.frame(for: sixLines)
+        XCTAssertEqual(passive.mode, .passiveScroll)
+        XCTAssertFalse(passive.text.contains("line 1"))
+        XCTAssertTrue(passive.text.hasPrefix("line 2"))
+        XCTAssertTrue(passive.text.hasSuffix("line 6\n"))
+    }
+
+    func testLayoutWrapsAt55CharactersAndPreservesParagraphs() {
+        let longWord = String(repeating: "a", count: 56)
+        let lines = EvenTextLayout.wrappedLines("\(longWord)\n\nlast")
+        XCTAssertEqual(lines.map(\.count), [55, 1, 0, 4])
+    }
+
+    func testInteractivePagesUseFiveLinesAndNormalizedUTF8Positions() {
+        let text = Array(repeating: "aaaa", count: 15).joined(separator: "\n")
+        let pages = EvenTextLayout.pages(for: text)
+        XCTAssertEqual(pages.count, 3)
+        XCTAssertEqual(pages.map(\.position), [0, 45, 90])
+        XCTAssertTrue(pages[0].text.hasPrefix("\naaaa"))
+        XCTAssertEqual(pages[1].text, Array(repeating: "aaaa", count: 5).joined(separator: "\n") + "\n")
+        XCTAssertEqual(pages[2].text, pages[1].text)
+    }
+
+    func testCompletedFinalPageMatchesLastPassiveFiveLineWindow() {
+        let text = (1...7).map { "line \($0)" }.joined(separator: "\n")
+        let passiveFrame = EvenTextLayout.frame(for: text)
+        let finalPage = EvenTextLayout.pages(for: text).last
+
+        XCTAssertEqual(passiveFrame.mode, .passiveScroll)
+        XCTAssertEqual(finalPage?.text, passiveFrame.text)
+    }
+
+    func testInteractivePositionsUseUTF8ByteOffsets() {
+        let text = Array(repeating: "é", count: 5)
+            + Array(repeating: "a", count: 5)
+            + Array(repeating: "z", count: 5)
+        let pages = EvenTextLayout.pages(for: text.joined(separator: "\n"))
+
+        XCTAssertEqual(pages.map(\.position), [0, 54, 90])
+    }
+
     private func makeClient(baseURL: URL = URL(string: "https://hermes.example/v1")!) -> HermesClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
@@ -189,11 +373,43 @@ final class HermesClientTests: XCTestCase {
             data: Data(body.utf8)
         )
     }
+
+    private static func streamingProbeResponse(for request: URLRequest) -> MockResponse {
+        MockResponse(
+            response: HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "text/event-stream"]
+            )!,
+            data: Data(),
+            chunks: [
+                MockChunk(
+                    delay: 0,
+                    data: Data("event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"1 \"}\n\n".utf8)
+                ),
+                MockChunk(
+                    delay: 0.05,
+                    data: Data("event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"2 \"}\n\n".utf8)
+                ),
+                MockChunk(
+                    delay: 0.20,
+                    data: Data("event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"output\":[]}}\n\n".utf8)
+                )
+            ]
+        )
+    }
+}
+
+private struct MockChunk {
+    let delay: TimeInterval
+    let data: Data
 }
 
 private struct MockResponse {
     let response: HTTPURLResponse
     let data: Data
+    var chunks: [MockChunk] = []
     var finishes = true
 }
 
@@ -211,7 +427,14 @@ private final class MockURLProtocol: URLProtocol {
             let result = try Self.handler?(request)
             guard let result else { throw URLError(.badServerResponse) }
             client?.urlProtocol(self, didReceive: result.response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: result.data)
+            if result.chunks.isEmpty {
+                client?.urlProtocol(self, didLoad: result.data)
+            } else {
+                for chunk in result.chunks {
+                    if chunk.delay > 0 { Thread.sleep(forTimeInterval: chunk.delay) }
+                    client?.urlProtocol(self, didLoad: chunk.data)
+                }
+            }
             if result.finishes {
                 client?.urlProtocolDidFinishLoading(self)
             }
@@ -227,17 +450,56 @@ private final class MockURLProtocol: URLProtocol {
 
 private final class RequestBox: @unchecked Sendable {
     private let lock = NSLock()
-    private var value: URLRequest?
+    private var values: [URLRequest] = []
+    private var bodiesByPath: [String: Data] = [:]
 
     func set(_ request: URLRequest) {
+        let capturedBody = request.httpBody ?? Self.read(stream: request.httpBodyStream)
         lock.lock()
-        value = request
+        values.append(request)
+        if let capturedBody, let path = request.url?.path {
+            bodiesByPath[path] = capturedBody
+        }
         lock.unlock()
     }
 
     func get() -> URLRequest? {
         lock.lock()
         defer { lock.unlock() }
-        return value
+        return values.last
+    }
+
+    func getBody() -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let path = values.last?.url?.path else { return nil }
+        return bodiesByPath[path]
+    }
+
+    func getAll() -> [URLRequest] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
+    }
+
+    func body(forPath path: String) -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return bodiesByPath[path]
+    }
+
+    private static func read(stream: InputStream?) -> Data? {
+        guard let stream else { return nil }
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1_024)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { return nil }
+            if count == 0 { return data }
+            data.append(contentsOf: buffer.prefix(count))
+        }
     }
 }

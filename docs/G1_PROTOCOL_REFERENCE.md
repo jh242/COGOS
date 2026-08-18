@@ -229,10 +229,10 @@ Multi-packet text rendering for AI responses. The header byte's upper
 ## Streaming text — `0x54` (AI streaming, supersedes `0x4E`)
 
 Current Even app's AI reply surface. One `prepare` packet opens a logical
-message, followed by cumulative `text` updates — each update carries the
-entire answer so far; firmware replaces its buffer on every write and
-paginates internally. A final `text` update with status byte `0x64` hands
-the buffer off to the scrollable viewer.
+message. While the answer fits five wrapped lines, cumulative `text` updates
+replace the visible buffer. After overflow, the phone sends only the newest
+five-line window as each delta arrives. On completion the phone enters an
+interactive viewer and re-sends five-line pages in response to L/R taps.
 
 **12-byte header (all packets):**
 
@@ -248,9 +248,8 @@ the buffer off to the scrollable viewer.
 [6]  0x00
 [7]  chunk_index : u8          1-based
 [8]  0x00
-[9]  scroll_flag : u8          0x00 during streaming and the initial
-                               "done" re-send; 0x01 on phone-driven
-                               scroll-position updates after completion
+[9]  scroll_flag : u8          0x00 for live/passive updates; 0x01 for
+                               completed phone-driven viewer updates
 [10] 0x00
 [11] status : u8               see table below
 [12+] UTF-8 payload             sub = 0x03 only
@@ -261,16 +260,18 @@ the buffer off to the scrollable viewer.
 | Value | byte 9 | Meaning |
 |-------|--------|---------|
 | `0x00` | `0x00` | Prepare (sub = `0x02`, no payload) |
-| `0xFF` | `0x00` | Streaming — firmware pins viewport to the bottom |
-| `0x64` | `0x00` | **Complete** — final re-send of the full answer; flips firmware into the scrollable viewer. Without this packet the display stays locked to the last 3 lines |
-| `0x00..0x64` | `0x01` | Scroll-position percentage (phone-driven) — re-sends the same text with the viewport set to N % after a user tap. `0x00` = top, `0x64` = bottom |
+| `0xFF` | `0x00` | Streaming while content fits — cumulative answer-so-far |
+| `0x64` | `0x00` | Passive overflow — newest five-line window while deltas continue |
+| `0x00..0x5A` | `0x01` | Interactive page position derived from its UTF-8 offset; `0x00` = first page and `0x5A` = last navigable offset |
+| `0x64` | `0x01` | Enter the completed viewer on its final page |
 
 **Payload conventions:**
 
 - Leading `\n\n` pushes the first line below the dashboard header (matches
   the official app's framing).
-- Trailing `\n` after every word during streaming — observed in captures;
-  firmware seems to treat it as a soft word-boundary marker.
+- Plain text is word-wrapped by the phone at 55 characters while preserving
+  paragraph breaks. Each passive or interactive payload contains at most
+  five logical lines.
 - Max payload per chunk is **100 bytes** (header is 12, total cap is 112).
   Longer cumulative text is split across multiple chunks sharing a seq.
 
@@ -281,15 +282,16 @@ the buffer off to the scrollable viewer.
 
 ```
 prepare           sub=02 status=00
-text streaming    sub=03 status=FF   (one per new token, cumulative)
-text complete     sub=03 status=64   (final, same full text)
-── firmware now allows single-tap scroll ──
-[optional] text scroll  sub=03 byte9=01 status=00..64   (phone-driven on tap)
+text streaming    sub=03 byte9=00 status=FF   (cumulative while it fits)
+text passive      sub=03 byte9=00 status=64   (newest 5 lines after overflow)
+text viewer       sub=03 byte9=01 status=64   (completed final-page entry)
+[tap] text page   sub=03 byte9=01 status=00..5A  (L previous / R next)
+close             sub=01                         (short answer or viewer exit)
 ```
 
-Pinned 2026-04-21 via `PacketLogs/HeldLeftBar_AI_MultiLineWithScroll`
-capture — byte 11 flip `0xFF → 0x64` happens exactly once, after the last
-streaming chunk, immediately before scroll becomes available.
+Pinned from the OEM multiline capture: byte 11 flips `0xFF → 0x64` as
+soon as content exceeds five lines, while text is still arriving. Each
+logical update consumes a new sequence; only chunks of that update share it.
 
 ---
 
