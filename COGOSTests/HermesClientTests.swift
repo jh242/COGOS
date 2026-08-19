@@ -333,24 +333,26 @@ final class HermesClientTests: XCTestCase {
         XCTAssertNotNil(secondResponse)
     }
 
-    func testFiveLineLayoutSwitchesToPassiveWindow() {
+    func testFiveLineLayoutKeepsNonOverlappingPages() {
         let fiveLines = (1...5).map { "line \($0)" }.joined(separator: "\n")
         let streaming = EvenTextLayout.frame(for: fiveLines)
         XCTAssertEqual(streaming.mode, .streaming)
         XCTAssertTrue(streaming.text.hasPrefix("\n\nline 1"))
 
         let sixLines = fiveLines + "\nline 6"
-        let passive = EvenTextLayout.frame(for: sixLines)
-        XCTAssertEqual(passive.mode, .passiveScroll)
-        XCTAssertFalse(passive.text.contains("line 1"))
-        XCTAssertTrue(passive.text.hasPrefix("line 2"))
-        XCTAssertTrue(passive.text.hasSuffix("line 6\n"))
+        let firstPage = EvenTextLayout.frame(for: sixLines, pageIndex: 0)
+        let secondPage = EvenTextLayout.frame(for: sixLines, pageIndex: 1)
+        XCTAssertEqual(firstPage.mode, .passiveScroll)
+        XCTAssertTrue(firstPage.text.contains("line 1"))
+        XCTAssertFalse(firstPage.text.contains("line 6"))
+        XCTAssertTrue(secondPage.text.hasPrefix("line 6"))
+        XCTAssertFalse(secondPage.text.contains("line 1"))
     }
 
-    func testLayoutWrapsAt55CharactersAndPreservesParagraphs() {
-        let longWord = String(repeating: "a", count: 56)
+    func testLayoutWrapsAt40CharactersAndPreservesParagraphs() {
+        let longWord = String(repeating: "a", count: 41)
         let lines = EvenTextLayout.wrappedLines("\(longWord)\n\nlast")
-        XCTAssertEqual(lines.map(\.count), [55, 1, 0, 4])
+        XCTAssertEqual(lines.map(\.count), [40, 1, 0, 4])
     }
 
     func testInteractivePagesUseFiveLinesAndNormalizedUTF8Positions() {
@@ -363,13 +365,15 @@ final class HermesClientTests: XCTestCase {
         XCTAssertEqual(pages[2].text, pages[1].text)
     }
 
-    func testCompletedFinalPageMatchesLastPassiveFiveLineWindow() {
+    func testCompletedFinalPageIsRemainderNotSlidingTail() {
         let text = (1...7).map { "line \($0)" }.joined(separator: "\n")
-        let passiveFrame = EvenTextLayout.frame(for: text)
-        let finalPage = EvenTextLayout.pages(for: text).last
+        let pages = EvenTextLayout.pages(for: text)
 
-        XCTAssertEqual(passiveFrame.mode, .passiveScroll)
-        XCTAssertEqual(finalPage?.text, passiveFrame.text)
+        XCTAssertEqual(pages.count, 2)
+        XCTAssertTrue(pages[0].text.contains("line 1"))
+        XCTAssertTrue(pages[0].text.contains("line 5"))
+        XCTAssertFalse(pages[0].text.contains("line 6"))
+        XCTAssertEqual(pages[1].text, "line 6\nline 7\n")
     }
 
     func testInteractivePositionsUseUTF8ByteOffsets() {
@@ -381,29 +385,32 @@ final class HermesClientTests: XCTestCase {
         XCTAssertEqual(pages.map(\.position), [0, 54, 90])
     }
 
-    func testInteractivePagesCoverEveryWrappedLine() {
+    func testInteractivePagesCoverEveryWrappedLineWithoutOverlap() {
         let text = (1...23).map { "Answer line \($0)." }.joined(separator: "\n")
         let lines = EvenTextLayout.wrappedLines(text)
+        let pages = EvenTextLayout.pages(for: text)
         XCTAssertGreaterThan(lines.count, EvenTextLayout.linesPerPage)
 
-        let finalWindowStart = max(0, lines.count - EvenTextLayout.linesPerPage)
-        var starts: [Int] = []
-        var start = 0
-        while start < finalWindowStart {
-            starts.append(start)
-            start += EvenTextLayout.linesPerPage
+        var covered: [Int] = []
+        for page in pages {
+            covered.append(contentsOf: page.lines.indices)
         }
-        if starts.last != finalWindowStart {
-            starts.append(finalWindowStart)
-        }
+        XCTAssertEqual(covered, Array(0..<lines.count))
+        XCTAssertEqual(Set(covered).count, lines.count)
+    }
 
-        var covered = Set<Int>()
-        for lineIndex in starts {
-            for index in lineIndex..<min(lineIndex + EvenTextLayout.linesPerPage, lines.count) {
-                covered.insert(index)
-            }
+    func testTextPacketsDoNotSplitUTF8CodePoints() {
+        let prefix = String(repeating: "a", count: 99)
+        let packets = EvenAIText54.textPackets(seq: 1, text: prefix + "éé")
+        XCTAssertGreaterThanOrEqual(packets.count, 2)
+        let payloads = packets.map { $0.dropFirst(12) }
+        for payload in payloads {
+            XCTAssertNotNil(String(data: Data(payload), encoding: .utf8))
         }
-        XCTAssertEqual(covered, Set(0..<lines.count))
+        XCTAssertEqual(
+            String(data: Data(payloads.joined()), encoding: .utf8),
+            prefix + "éé"
+        )
     }
 
     func testInteractivePositionsIncreaseMonotonically() {

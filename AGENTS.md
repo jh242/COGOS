@@ -102,15 +102,16 @@ Send to L first; only send to R after L acknowledges with `0xC9`.
 11: status byte —
       prepare:   0x00
       streaming: 0xFF while the answer fits the five-line viewport
-      passive:   0x64 after overflow; phone sends the newest five lines
+      passive:   0x64 after overflow; phone sends the next five-line page
       interactive: 0x00..0x5A page position when byte 9 = 0x01;
                    0x64 is the completed viewer's final-page entry
 12+: UTF-8 (sub=0x03 only)
 ```
 
 Each reply starts with one prepare. While wrapped content fits five lines,
-send cumulative text with status=0xFF. After overflow, send the newest
-five-line window with status=0x64 as deltas arrive. On completion, enter the
+send cumulative text with status=0xFF. After overflow, send the next
+non-overlapping five-line page with status=0x64, holding each page long
+enough to read. On completion, enter the
 phone-driven viewer on the final page with byte 9=0x01/status=0x64; F5 01 taps
 send earlier or later five-line pages with positions in 0...90. Short replies
 and viewer exits use sub=0x01 close. Every update consumes a fresh sequence.
@@ -158,8 +159,8 @@ Keychain. Scheme overrides are `HERMES_API_URL` and `HERMES_API_KEY`.
 - `Proto.sendEvenAITextPrepare()` + `Proto.sendEvenAIText(_:)` — don't
   hand-roll 0x54 headers; use `EvenAIText54` encoder.
 - Each AI reply is one prepare + N text updates with a fresh sequence per
-  update. The phone wraps to 55 characters, renders five-line windows, and
-  drives completed-reply navigation from F5 01 L/R taps.
+  update. The phone wraps to 40 characters, renders non-overlapping
+  five-line pages, and drives completed-reply navigation from F5 01 L/R taps.
 - Actor isolation: `Proto` and `BleRequestQueue` are actors; call with `await`.
 - `EvenAISession.clear()` resets all state — call on every exit path.
 - The Hermes token lives in Keychain or `HERMES_API_KEY`; never commit it.
