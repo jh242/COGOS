@@ -156,9 +156,13 @@ final class EvenTextRenderer {
             try Task.checkCancellation()
             guard await shouldContinue() else { return latest }
             latest = snapshot
+            latest = snapshot
             onSnapshot(snapshot)
             let frame = EvenTextLayout.frame(for: snapshot)
             if frame != lastFrame {
+                guard isDisplayOpen else {
+                    throw EvenTextRendererError.transportFailed
+                }
                 guard await proto.sendEvenAIText(frame.text, mode: frame.mode) else {
                     throw EvenTextRendererError.transportFailed
                 }

@@ -101,7 +101,7 @@ final class EvenAISession: ObservableObject {
                     },
                     shouldContinue: { [weak self] in
                         guard let self else { return false }
-                        return self.isRunning && self.activeTurnID == turnID
+                        return self.activeTurnID == turnID
                     }
                 )
             } catch is CancellationError {
@@ -145,6 +145,10 @@ final class EvenAISession: ObservableObject {
     }
 
     func exitViewer() async {
+        if isSyncing {
+            await cancelActiveResponse()
+            return
+        }
         await renderer.exitViewer()
     }
 
@@ -172,7 +176,7 @@ final class EvenAISession: ObservableObject {
                 text,
                 shouldContinue: { [weak self] in
                     guard let self else { return false }
-                    return self.isRunning && self.activeTurnID == turnID
+                    return self.activeTurnID == turnID
                 }
             )
             return nil
