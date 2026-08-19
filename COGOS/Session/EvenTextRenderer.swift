@@ -33,49 +33,42 @@ struct EvenTextLayout {
         let lines = wrappedLines(text)
         if lines.count <= linesPerPage {
             return Frame(
-                text: "\n\n" + lines.joined(separator: "\n") + "\n",
+                text: framedBody(lines[...], leadingPadding: .streamingHeader),
                 mode: .streaming
             )
         }
 
+        let window = lines[(lines.count - linesPerPage)..<lines.count]
         return Frame(
-            text: Array(lines.suffix(linesPerPage)).joined(separator: "\n") + "\n",
+            text: framedBody(window, leadingPadding: .none),
             mode: .passiveScroll
         )
     }
 
     static func pages(for text: String) -> [Page] {
         let lines = wrappedLines(text)
-        guard !lines.isEmpty else { return [] }
+        guard lines.count > linesPerPage else { return [] }
 
-        let finalWindowStart = max(0, lines.count - linesPerPage)
-        var starts = Array(stride(from: 0, through: finalWindowStart, by: linesPerPage))
-        if finalWindowStart > 0 {
-            if starts.last != finalWindowStart {
-                starts.append(finalWindowStart)
-            }
-        }
-
-        let byteOffsets = starts.map { lineIndex -> Int in
-            lines[..<lineIndex].reduce(0) { total, line in
-                total + line.utf8.count + 1
-            }
-        }
+        let starts = pageStarts(lineCount: lines.count)
+        let byteOffsets = starts.map { byteOffset(forLine: $0, in: lines) }
         let lastOffset = byteOffsets.last ?? 0
 
+        var previousPosition = -1
         return starts.enumerated().map { pageIndex, lineIndex in
             let end = min(lineIndex + linesPerPage, lines.count)
-            var pageText = lines[lineIndex..<end].joined(separator: "\n") + "\n"
-            if pageIndex == 0 { pageText = "\n" + pageText }
+            let padding: LeadingPadding = lineIndex == 0 ? .interactiveFirstPage : .none
+            let pageText = framedBody(lines[lineIndex..<end], leadingPadding: padding)
 
-            // The OEM viewer reserves 100 for its final entry packet. User
-            // navigation occupies 0...90, normalized by UTF-8 scroll offset.
-            let position: UInt8
+            var position: UInt8
             if lastOffset == 0 {
                 position = 0
             } else {
                 position = UInt8(min(90, (byteOffsets[pageIndex] * 90) / lastOffset))
             }
+            if Int(position) <= previousPosition {
+                position = UInt8(min(90, previousPosition + 1))
+            }
+            previousPosition = Int(position)
             return Page(position: position, text: pageText)
         }
     }
@@ -87,6 +80,45 @@ struct EvenTextLayout {
         return normalized
             .split(separator: "\n", omittingEmptySubsequences: false)
             .flatMap { wrap(line: String($0)) }
+    }
+
+    private enum LeadingPadding {
+        case none
+        case streamingHeader
+        case interactiveFirstPage
+    }
+
+    private static func framedBody<S: Sequence>(
+        _ lines: S,
+        leadingPadding: LeadingPadding
+    ) -> String where S.Element == String {
+        let body = lines.joined(separator: "\n") + "\n"
+        switch leadingPadding {
+        case .none:
+            return body
+        case .streamingHeader, .interactiveFirstPage:
+            return "\n\n" + body
+        }
+    }
+
+    private static func pageStarts(lineCount: Int) -> [Int] {
+        let finalWindowStart = max(0, lineCount - linesPerPage)
+        var starts: [Int] = []
+        var start = 0
+        while start < finalWindowStart {
+            starts.append(start)
+            start += linesPerPage
+        }
+        if starts.last != finalWindowStart {
+            starts.append(finalWindowStart)
+        }
+        return starts
+    }
+
+    private static func byteOffset(forLine lineIndex: Int, in lines: [String]) -> Int {
+        lines[..<lineIndex].reduce(0) { total, line in
+            total + line.utf8.count + 1
+        }
     }
 
     private static func wrap(line: String) -> [String] {
@@ -105,16 +137,18 @@ struct EvenTextLayout {
 
         for word in words {
             var remainder = word
-            while remainder.count > lineWidth {
+            while utf8ByteCount(remainder) > lineWidth {
                 flushCurrent()
-                result.append(String(remainder.prefix(lineWidth)))
-                remainder = String(remainder.dropFirst(lineWidth))
+                let chunk = utf8Prefix(remainder, maxBytes: lineWidth)
+                guard !chunk.isEmpty else { break }
+                result.append(chunk)
+                remainder = String(remainder.dropFirst(chunk.count))
             }
             guard !remainder.isEmpty else { continue }
 
             if current.isEmpty {
                 current = remainder
-            } else if current.count + 1 + remainder.count <= lineWidth {
+            } else if utf8ByteCount(current) + 1 + utf8ByteCount(remainder) <= lineWidth {
                 current += " " + remainder
             } else {
                 flushCurrent()
@@ -124,12 +158,30 @@ struct EvenTextLayout {
         flushCurrent()
         return result
     }
+
+    private static func utf8ByteCount(_ string: String) -> Int {
+        string.utf8.count
+    }
+
+    private static func utf8Prefix(_ string: String, maxBytes: Int) -> String {
+        let data = Data(string.utf8)
+        if data.count <= maxBytes { return string }
+        var end = maxBytes
+        while end > 0 && (data[end] & 0xC0) == 0x80 {
+            end -= 1
+        }
+        return String(decoding: data.prefix(end), as: UTF8.self)
+    }
 }
 
 /// Owns the complete G1 0x54 reply lifecycle, including the interactive
 /// viewer that the phone drives after a long response completes.
 @MainActor
 final class EvenTextRenderer {
+    /// Minimum time the phone keeps a glasses frame visible before replacing
+    /// it during live Hermes streaming. The app UI still updates immediately.
+    private static let minGlassesFrameInterval: Duration = .milliseconds(1200)
+
     private let proto: Proto
     private var pages: [EvenTextLayout.Page] = []
     private var currentPageIndex = 0
@@ -151,27 +203,32 @@ final class EvenTextRenderer {
         try await beginReply()
 
         var latest = ""
-        var lastFrame: EvenTextLayout.Frame?
+        var lastSentFrame: EvenTextLayout.Frame?
+        var lastSendInstant: ContinuousClock.Instant?
+
         for try await snapshot in snapshots {
             try Task.checkCancellation()
             guard await shouldContinue() else { return latest }
             latest = snapshot
-            latest = snapshot
             onSnapshot(snapshot)
-            let frame = EvenTextLayout.frame(for: snapshot)
-            if frame != lastFrame {
-                guard isDisplayOpen else {
-                    throw EvenTextRendererError.transportFailed
-                }
-                guard await proto.sendEvenAIText(frame.text, mode: frame.mode) else {
-                    throw EvenTextRendererError.transportFailed
-                }
-                lastFrame = frame
-            }
+            lastSendInstant = try await sendLatestGlassesFrame(
+                latest: latest,
+                lastSentFrame: &lastSentFrame,
+                lastSendInstant: lastSendInstant,
+                force: false,
+                shouldContinue: shouldContinue
+            )
         }
 
         try Task.checkCancellation()
         guard !latest.isEmpty, await shouldContinue() else { return latest }
+        _ = try await sendLatestGlassesFrame(
+            latest: latest,
+            lastSentFrame: &lastSentFrame,
+            lastSendInstant: lastSendInstant,
+            force: true,
+            shouldContinue: shouldContinue
+        )
         try await finishReply(latest)
         return latest
     }
@@ -260,5 +317,37 @@ final class EvenTextRenderer {
             throw EvenTextRendererError.transportFailed
         }
         isScrollViewerActive = true
+    }
+
+    @discardableResult
+    private func sendLatestGlassesFrame(
+        latest: String,
+        lastSentFrame: inout EvenTextLayout.Frame?,
+        lastSendInstant: ContinuousClock.Instant?,
+        force: Bool,
+        shouldContinue: () async -> Bool
+    ) async throws -> ContinuousClock.Instant? {
+        let frame = EvenTextLayout.frame(for: latest)
+        guard frame != lastSentFrame else { return lastSendInstant }
+
+        if !force, let lastSendInstant {
+            let elapsed = ContinuousClock.now - lastSendInstant
+            if elapsed < Self.minGlassesFrameInterval {
+                try await Task.sleep(for: Self.minGlassesFrameInterval - elapsed)
+                try Task.checkCancellation()
+                guard await shouldContinue() else { return lastSendInstant }
+            }
+        }
+
+        let refreshed = EvenTextLayout.frame(for: latest)
+        guard refreshed != lastSentFrame else { return lastSendInstant }
+        guard isDisplayOpen else {
+            throw EvenTextRendererError.transportFailed
+        }
+        guard await proto.sendEvenAIText(refreshed.text, mode: refreshed.mode) else {
+            throw EvenTextRendererError.transportFailed
+        }
+        lastSentFrame = refreshed
+        return ContinuousClock.now
     }
 }

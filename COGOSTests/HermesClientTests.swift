@@ -358,7 +358,7 @@ final class HermesClientTests: XCTestCase {
         let pages = EvenTextLayout.pages(for: text)
         XCTAssertEqual(pages.count, 3)
         XCTAssertEqual(pages.map(\.position), [0, 45, 90])
-        XCTAssertTrue(pages[0].text.hasPrefix("\naaaa"))
+        XCTAssertTrue(pages[0].text.hasPrefix("\n\naaaa"))
         XCTAssertEqual(pages[1].text, Array(repeating: "aaaa", count: 5).joined(separator: "\n") + "\n")
         XCTAssertEqual(pages[2].text, pages[1].text)
     }
@@ -379,6 +379,39 @@ final class HermesClientTests: XCTestCase {
         let pages = EvenTextLayout.pages(for: text.joined(separator: "\n"))
 
         XCTAssertEqual(pages.map(\.position), [0, 54, 90])
+    }
+
+    func testInteractivePagesCoverEveryWrappedLine() {
+        let text = (1...23).map { "Answer line \($0)." }.joined(separator: "\n")
+        let lines = EvenTextLayout.wrappedLines(text)
+        XCTAssertGreaterThan(lines.count, EvenTextLayout.linesPerPage)
+
+        let finalWindowStart = max(0, lines.count - EvenTextLayout.linesPerPage)
+        var starts: [Int] = []
+        var start = 0
+        while start < finalWindowStart {
+            starts.append(start)
+            start += EvenTextLayout.linesPerPage
+        }
+        if starts.last != finalWindowStart {
+            starts.append(finalWindowStart)
+        }
+
+        var covered = Set<Int>()
+        for lineIndex in starts {
+            for index in lineIndex..<min(lineIndex + EvenTextLayout.linesPerPage, lines.count) {
+                covered.insert(index)
+            }
+        }
+        XCTAssertEqual(covered, Set(0..<lines.count))
+    }
+
+    func testInteractivePositionsIncreaseMonotonically() {
+        let text = (1...30).map { "Segment \($0) has enough text to wrap cleanly." }.joined(separator: "\n")
+        let positions = EvenTextLayout.pages(for: text).map(\.position)
+        for index in 1..<positions.count {
+            XCTAssertGreaterThan(positions[index], positions[index - 1])
+        }
     }
 
     private func makeClient(baseURL: URL = URL(string: "https://hermes.example/v1")!) -> HermesClient {
