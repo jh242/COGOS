@@ -21,8 +21,11 @@ final class GestureRouter {
         let payload = data.count > 2 ? data[2] : 0
 
         switch notifyIndex {
-        case 0x00: // ACTION_DOUBLE_TAP_FOR_EXIT / close active text viewer
-            if session.isViewerActive {
+        case 0x00: // ACTION_DOUBLE_TAP_FOR_EXIT / close interactive scroll viewer
+            // Only the post-reply scroll viewer is closable via 0x00. Treating
+            // live Hermes streaming as "viewer active" (PR #18) closed the 0x54
+            // session while onSnapshot kept updating the phone UI.
+            if session.isScrollViewerActive {
                 Task { await session.exitViewer() }
             }
         case 0x01:
