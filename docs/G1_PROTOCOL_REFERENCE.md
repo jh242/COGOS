@@ -230,9 +230,10 @@ Multi-packet text rendering for AI responses. The header byte's upper
 
 Current Even app's AI reply surface. One `prepare` packet opens a logical
 message. While the answer fits five wrapped lines, cumulative `text` updates
-replace the visible buffer. After overflow, the phone sends only the newest
-five-line window as each delta arrives. On completion the phone enters an
-interactive viewer and re-sends five-line pages in response to L/R taps.
+replace the visible buffer. After overflow, the phone sends the next
+non-overlapping five-line page, holding each page long enough to read. On
+completion the phone enters an interactive viewer and re-sends five-line
+pages in response to L/R taps.
 
 **12-byte header (all packets):**
 
@@ -261,7 +262,7 @@ interactive viewer and re-sends five-line pages in response to L/R taps.
 |-------|--------|---------|
 | `0x00` | `0x00` | Prepare (sub = `0x02`, no payload) |
 | `0xFF` | `0x00` | Streaming while content fits — cumulative answer-so-far |
-| `0x64` | `0x00` | Passive overflow — newest five-line window while deltas continue |
+| `0x64` | `0x00` | Passive overflow — next non-overlapping five-line page |
 | `0x00..0x5A` | `0x01` | Interactive page position derived from its UTF-8 offset; `0x00` = first page and `0x5A` = last navigable offset |
 | `0x64` | `0x01` | Enter the completed viewer on its final page |
 
@@ -269,9 +270,9 @@ interactive viewer and re-sends five-line pages in response to L/R taps.
 
 - Leading `\n\n` pushes the first line below the dashboard header (matches
   the official app's framing).
-- Plain text is word-wrapped by the phone at 55 characters while preserving
+- Plain text is word-wrapped by the phone at 40 characters while preserving
   paragraph breaks. Each passive or interactive payload contains at most
-  five logical lines.
+  five logical lines. Chunks split on UTF-8 code-point boundaries.
 - Max payload per chunk is **100 bytes** (header is 12, total cap is 112).
   Longer cumulative text is split across multiple chunks sharing a seq.
 
@@ -283,7 +284,7 @@ interactive viewer and re-sends five-line pages in response to L/R taps.
 ```
 prepare           sub=02 status=00
 text streaming    sub=03 byte9=00 status=FF   (cumulative while it fits)
-text passive      sub=03 byte9=00 status=64   (newest 5 lines after overflow)
+text passive      sub=03 byte9=00 status=64   (next 5-line page after overflow)
 text viewer       sub=03 byte9=01 status=64   (completed final-page entry)
 [tap] text page   sub=03 byte9=01 status=00..5A  (L previous / R next)
 close             sub=01                         (short answer or viewer exit)

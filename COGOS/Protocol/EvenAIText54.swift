@@ -13,7 +13,7 @@ enum EvenAIText54 {
     enum TextMode: Equatable, Sendable {
         /// Reply still fits the viewport; firmware keeps the newest text visible.
         case streaming
-        /// Reply has exceeded the viewport; the phone sends a sliding window.
+        /// Reply has exceeded the viewport; the phone sends one five-line page.
         case passiveScroll
         /// Completed reply controlled by TouchBar taps. Position is 0...100.
         case interactive(position: UInt8)
@@ -55,14 +55,12 @@ enum EvenAIText54 {
             return [headerOnlyText(seq: seq, mode: mode)]
         }
 
-        let chunkCount = max(1, (payload.count + maxChunkPayload - 1) / maxChunkPayload)
+        let slices = utf8Slices(payload, maxBytes: maxChunkPayload)
+        let chunkCount = max(1, slices.count)
         var packets: [Data] = []
         packets.reserveCapacity(chunkCount)
 
-        for index in 0..<chunkCount {
-            let start = index * maxChunkPayload
-            let end = min(start + maxChunkPayload, payload.count)
-            let slice = payload.subdata(in: start..<end)
+        for (index, slice) in slices.enumerated() {
             var packet = Data([
                 0x54, UInt8(12 + slice.count), 0x00,
                 seq, 0x03,
@@ -84,5 +82,29 @@ enum EvenAIText54 {
             0x01, 0x00,
             mode.scrollFlag, 0x00, mode.status
         ])
+    }
+
+    /// Split on UTF-8 code-point boundaries so a 100-byte BLE chunk never
+    /// ends in the middle of a character. Firmware concatenates chunks as
+    /// text; a torn code point dropped the last word of a page.
+    private static func utf8Slices(_ data: Data, maxBytes: Int) -> [Data] {
+        guard !data.isEmpty else { return [] }
+
+        var slices: [Data] = []
+        var start = 0
+        while start < data.count, slices.count < Int(UInt8.max) {
+            var end = min(start + maxBytes, data.count)
+            if end < data.count {
+                while end > start && (data[end] & 0xC0) == 0x80 {
+                    end -= 1
+                }
+                if end == start {
+                    end = min(start + maxBytes, data.count)
+                }
+            }
+            slices.append(data.subdata(in: start..<end))
+            start = end
+        }
+        return slices
     }
 }
