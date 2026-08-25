@@ -6,6 +6,14 @@ options:
   xcodeVersion: "16.0"
   generateEmptyDirectories: false
 
+packages:
+  SwiftAgent:
+    url: https://github.com/SwiftedMind/SwiftAgent
+    revision: 48bfda9219a5014c117aff3294e7987e17218a9d
+  SwiftMail:
+    url: https://github.com/Cocoanetics/SwiftMail
+    exactVersion: 1.11.0
+
 targets:
   COGOS:
     type: application
@@ -14,7 +22,6 @@ targets:
       - path: COGOS
         excludes:
           - README.md
-          - Agent
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jackhu.cogos
@@ -30,6 +37,10 @@ targets:
         GENERATE_INFOPLIST_FILE: false
     dependencies:
       - sdk: WeatherKit.framework
+      - package: SwiftAgent
+        product: OpenAISession
+      - package: SwiftMail
+        product: SwiftMail
     entitlements:
       path: COGOS/Supporting/COGOS.entitlements
       properties:
@@ -50,3 +61,5 @@ targets:
         SWIFT_VERSION: "5.0"
     dependencies:
       - target: COGOS
+      - package: SwiftMail
+        product: SwiftMail

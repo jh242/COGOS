@@ -7,6 +7,17 @@ struct ContextProvidersSettingsView: View {
     var body: some View {
         Form {
             Section(
+                header: Text("News"),
+                footer: Text("Google News RSS is summarized by a cheap OpenRouter model into a three-line digest for the glasses. Without an API key, clipped headlines are shown instead.")
+            ) {
+                Picker("Topic", selection: $settings.newsTopic) {
+                    ForEach(NewsTopic.allCases) { topic in
+                        Text(topic.displayName).tag(topic)
+                    }
+                }
+            }
+
+            Section(
                 header: Text("Commute Locations"),
                 footer: Text("Up to 5. Used by CommuteSource to show transit directions.")
             ) {

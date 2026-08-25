@@ -8,6 +8,47 @@ final class SettingsCommuteLocationsTests: XCTestCase {
     override func setUp() {
         super.setUp()
         UserDefaults.standard.removeObject(forKey: key)
+        UserDefaults.standard.removeObject(forKey: "news_topic")
+        UserDefaults.standard.removeObject(forKey: "openrouter_model")
+        UserDefaults.standard.removeObject(forKey: "openrouter_agent_model")
+        UserDefaults.standard.removeObject(forKey: "spoken_backend")
+        UserDefaults.standard.removeObject(forKey: "imap_host")
+        UserDefaults.standard.removeObject(forKey: "imap_port")
+        UserDefaults.standard.removeObject(forKey: "imap_username")
+        UserDefaults.standard.removeObject(forKey: "imap_mailbox")
+    }
+
+    func testNewsTopicDefaultsToTopStories() {
+        let s = Settings()
+        XCTAssertEqual(s.newsTopic, .top)
+    }
+
+    func testNewsTopicRoundTripsThroughUserDefaults() {
+        let s1 = Settings()
+        s1.newsTopic = .technology
+        let s2 = Settings()
+        XCTAssertEqual(s2.newsTopic, .technology)
+    }
+
+    func testOpenRouterModelDefaults() {
+        let s = Settings()
+        XCTAssertEqual(s.openRouterModel, OpenRouterClient.defaultModel)
+        XCTAssertEqual(s.openRouterAgentModel, OpenRouterClient.defaultAgentModel)
+        XCTAssertEqual(s.spokenBackend, .hermes)
+        XCTAssertEqual(s.imapHost, IMAPCredentials.iCloudHost)
+        XCTAssertEqual(s.imapPort, IMAPCredentials.defaultPort)
+        XCTAssertEqual(s.imapMailbox, IMAPCredentials.defaultMailbox)
+        XCTAssertEqual(s.imapUsername, "")
+        XCTAssertFalse(s.imapCredentials().isConfigured)
+    }
+
+    func testSpokenBackendAndAgentModelRoundTrip() {
+        let s1 = Settings()
+        s1.spokenBackend = .openRouter
+        s1.openRouterAgentModel = "openai/gpt-4o-mini"
+        let s2 = Settings()
+        XCTAssertEqual(s2.spokenBackend, .openRouter)
+        XCTAssertEqual(s2.openRouterAgentModel, "openai/gpt-4o-mini")
     }
 
     func testDefaultIsEmpty() {
