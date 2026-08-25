@@ -55,7 +55,10 @@ The news glance still uses a separate cheap chat completion
 (`poolside/laguna-xs-2.1:free` by default) to turn RSS headlines into a
 three-line digest. Without that key it falls back to clipped headlines.
 
-After adding or changing Swift packages, re-run `xcodegen generate`.
+After adding or changing Swift packages, re-run `xcodegen generate` and
+`./scripts/resolve-spm.sh`, then commit
+`COGOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`.
+Xcode Cloud has automatic resolution disabled, so Archive fails without that pin file.
 
 ## Project layout
 
