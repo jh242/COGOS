@@ -6,6 +6,10 @@ options:
   xcodeVersion: "16.0"
   generateEmptyDirectories: false
 
+# Keep ci_scripts in the project navigator so Xcode Cloud always finds them.
+fileGroups:
+  - ci_scripts
+
 packages:
   SwiftAgent:
     url: https://github.com/SwiftedMind/SwiftAgent
@@ -48,6 +52,11 @@ targets:
     scheme:
       testTargets:
         - COGOSTests
+      preActions:
+        - name: Trust SwiftAgent macros
+          script: |
+            "${SRCROOT}/ci_scripts/trust_macros.sh"
+          settingsTarget: COGOS
 
   COGOSTests:
     type: bundle.unit-test
