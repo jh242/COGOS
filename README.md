@@ -46,10 +46,10 @@ token in the in-app Settings screen, or export `HERMES_API_URL` and
 transcripts; Hermes owns all model, memory, tool, and agent behavior.
 
 Weather uses Apple WeatherKit (entitlement required). News glance fetches
-Google News RSS and asks a cheap OpenRouter model (`openai/gpt-4.1-nano`
-by default) for a three-line digest. Set `OPENROUTER_API_KEY` in the Xcode
-scheme or the in-app Settings screen. Without a key, clipped headlines are
-shown instead.
+Google News RSS and asks a free OpenRouter model (`poolside/laguna-xs-2.1:free`
+by default; pick another from the Settings dropdown) for a three-line digest.
+Set `OPENROUTER_API_KEY` in the Xcode scheme or the in-app Settings screen.
+Without a key, clipped headlines are shown instead.
 
 ## Layout
 

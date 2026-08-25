@@ -88,6 +88,59 @@ final class OpenRouterClientTests: XCTestCase {
         }
     }
 
+    func testParseFreeModelsKeepsTextFreePoolAndDropsAudio() throws {
+        let json = """
+        {"data":[
+          {"id":"google/lyria-3-clip-preview","name":"Lyria","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text","audio"]}},
+          {"id":"nvidia/nemotron-3.5-content-safety:free","name":"Safety","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text"]}},
+          {"id":"openai/gpt-4.1-nano","name":"GPT-4.1 Nano","pricing":{"prompt":"0.0000001","completion":"0.0000004"},"architecture":{"output_modalities":["text"]}},
+          {"id":"poolside/laguna-xs-2.1:free","name":"Poolside: Laguna XS 2.1 (free)","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text"]}},
+          {"id":"openrouter/free","name":"Free Models Router","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text"]}},
+          {"id":"google/gemma-4-31b-it:free","name":"Google: Gemma 4 31B (free)","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text"]}}
+        ]}
+        """.data(using: .utf8)!
+        let models = try OpenRouterClient.parseFreeModels(from: json)
+        XCTAssertEqual(models.map(\.id), [
+            "openrouter/free",
+            "poolside/laguna-xs-2.1:free",
+            "google/gemma-4-31b-it:free"
+        ])
+    }
+
+    func testPickerModelsInjectsSelectedSlugWhenMissing() {
+        let live = [OpenRouterModelInfo(id: "openrouter/free", name: "Free Models Router")]
+        let options = OpenRouterClient.pickerModels(live: live, selected: "acme/custom:free")
+        XCTAssertEqual(options.first?.id, "acme/custom:free")
+        XCTAssertEqual(options.map(\.id), ["acme/custom:free", "openrouter/free"])
+    }
+
+    func testPickerModelsFallsBackWhenLiveListEmpty() {
+        let options = OpenRouterClient.pickerModels(live: [], selected: OpenRouterClient.defaultModel)
+        XCTAssertTrue(options.contains(where: { $0.id == OpenRouterClient.defaultModel }))
+        XCTAssertTrue(options.contains(where: { $0.id == "openrouter/free" }))
+    }
+
+    func testListFreeModelsHitsModelsEndpoint() async throws {
+        let requestBox = OpenRouterRequestBox()
+        OpenRouterMockURLProtocol.handler = { request in
+            requestBox.set(request)
+            return OpenRouterMockURLProtocol.response(
+                for: request,
+                status: 200,
+                body: #"{"data":[{"id":"poolside/laguna-xs-2.1:free","name":"Laguna XS","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text"]}}]}"#
+            )
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [OpenRouterMockURLProtocol.self]
+        let models = try await OpenRouterClient.listFreeModels(
+            session: URLSession(configuration: configuration),
+            baseURL: URL(string: "https://openrouter.ai/api/v1")!
+        )
+        XCTAssertEqual(models.map(\.id), ["poolside/laguna-xs-2.1:free"])
+        XCTAssertEqual(requestBox.get()?.url?.absoluteString, "https://openrouter.ai/api/v1/models")
+        XCTAssertEqual(requestBox.get()?.httpMethod, "GET")
+    }
+
     private func makeClient() -> OpenRouterClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [OpenRouterMockURLProtocol.self]

@@ -26,7 +26,8 @@ in Keychain. Hermes owns model selection, memory, skills, and tools; COGOS
 sends only final speech transcripts and renders streamed final-answer text.
 
 The news glance uses a separate OpenRouter key (`OPENROUTER_API_KEY`, also in
-Settings / Keychain) and a cheap chat model to turn RSS headlines into a
+Settings / Keychain) and a free chat model from the Settings dropdown
+(`poolside/laguna-xs-2.1:free` by default) to turn RSS headlines into a
 three-line digest. Without that key it falls back to clipped headlines.
 
 ## Project layout

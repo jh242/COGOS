@@ -32,12 +32,27 @@ enum OpenRouterClientError: Error, LocalizedError, Sendable {
     }
 }
 
+struct OpenRouterModelInfo: Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+}
+
 /// Thin OpenAI-compatible chat client aimed at OpenRouter.
 /// Used by the news glance for a cheap, non-streaming digest — not for
 /// the Hermes conversation path.
 struct OpenRouterClient: Sendable {
     static let defaultBaseURL = URL(string: "https://openrouter.ai/api/v1")!
-    static let defaultModel = "openai/gpt-4.1-nano"
+    static let defaultModel = "poolside/laguna-xs-2.1:free"
+
+    /// Shown immediately in Settings so the picker isn't empty before the
+    /// live `/models` list arrives. Free-pool membership rotates.
+    static let fallbackFreeModels: [OpenRouterModelInfo] = [
+        OpenRouterModelInfo(id: "openrouter/free", name: "Free Models Router"),
+        OpenRouterModelInfo(id: "poolside/laguna-xs-2.1:free", name: "Poolside: Laguna XS 2.1 (free)"),
+        OpenRouterModelInfo(id: "poolside/laguna-s-2.1:free", name: "Poolside: Laguna S 2.1 (free)"),
+        OpenRouterModelInfo(id: "google/gemma-4-31b-it:free", name: "Google: Gemma 4 31B (free)"),
+        OpenRouterModelInfo(id: "nvidia/nemotron-3.5-lightning:free", name: "NVIDIA: Nemotron 3.5 Lightning (free)")
+    ]
 
     private let baseURL: URL
     private let apiKey: String
@@ -98,7 +113,80 @@ struct OpenRouterClient: Sendable {
         return text
     }
 
+    /// Public catalog; no API key required. Returns glanceable free text models
+    /// (the `:free` pool rotates) sorted with the auto-router and default first.
+    static func listFreeModels(
+        session: URLSession = .shared,
+        baseURL: URL = OpenRouterClient.defaultBaseURL
+    ) async throws -> [OpenRouterModelInfo] {
+        var request = URLRequest(url: endpoint("models", baseURL: baseURL))
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenRouterClientError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw httpError(statusCode: http.statusCode, body: data)
+        }
+        return try parseFreeModels(from: data)
+    }
+
+    static func parseFreeModels(from data: Data) throws -> [OpenRouterModelInfo] {
+        let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
+        let free = decoded.data.compactMap { model -> OpenRouterModelInfo? in
+            guard isGlanceableFree(model) else { return nil }
+            return OpenRouterModelInfo(id: model.id, name: model.name)
+        }
+        return sortedForPicker(free)
+    }
+
+    static func pickerModels(
+        live: [OpenRouterModelInfo],
+        selected: String
+    ) -> [OpenRouterModelInfo] {
+        let trimmed = selected.trimmingCharacters(in: .whitespacesAndNewlines)
+        var list = live.isEmpty ? fallbackFreeModels : live
+        if !trimmed.isEmpty, !list.contains(where: { $0.id == trimmed }) {
+            list.insert(OpenRouterModelInfo(id: trimmed, name: trimmed), at: 0)
+        }
+        return list
+    }
+
+    private static func isGlanceableFree(_ model: ModelsResponse.Model) -> Bool {
+        let outputs = Set(model.architecture?.outputModalities ?? ["text"])
+        guard outputs.contains("text"), !outputs.contains("audio") else { return false }
+        if model.id.localizedCaseInsensitiveContains("content-safety") { return false }
+        if model.id.hasSuffix(":free") || model.id == "openrouter/free" { return true }
+        return isZero(model.pricing?.prompt) && isZero(model.pricing?.completion)
+    }
+
+    private static func isZero(_ price: String?) -> Bool {
+        guard let price, let value = Double(price) else { return false }
+        return value == 0
+    }
+
+    private static func sortedForPicker(_ models: [OpenRouterModelInfo]) -> [OpenRouterModelInfo] {
+        models.sorted { a, b in
+            let ra = pickerRank(a.id)
+            let rb = pickerRank(b.id)
+            if ra != rb { return ra < rb }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+    }
+
+    private static func pickerRank(_ id: String) -> Int {
+        if id == "openrouter/free" { return 0 }
+        if id == defaultModel { return 1 }
+        return 2
+    }
+
     private func endpoint(_ name: String) -> URL {
+        Self.endpoint(name, baseURL: baseURL)
+    }
+
+    private static func endpoint(_ name: String, baseURL: URL) -> URL {
         var root = baseURL
         if root.lastPathComponent != "v1" {
             root.appendPathComponent("v1")
@@ -147,6 +235,30 @@ private struct ChatRequest: Encodable {
 private struct ChatMessage: Codable {
     let role: String
     let content: String
+}
+
+private struct ModelsResponse: Decodable {
+    let data: [Model]
+
+    struct Model: Decodable {
+        let id: String
+        let name: String
+        let pricing: Pricing?
+        let architecture: Architecture?
+    }
+
+    struct Pricing: Decodable {
+        let prompt: String?
+        let completion: String?
+    }
+
+    struct Architecture: Decodable {
+        let outputModalities: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case outputModalities = "output_modalities"
+        }
+    }
 }
 
 private struct ChatResponse: Decodable {

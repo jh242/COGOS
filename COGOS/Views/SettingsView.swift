@@ -38,9 +38,7 @@ struct SettingsView: View {
                 SecureField("API key", text: $settings.openRouterAPIKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                TextField("Model", text: $settings.openRouterModel)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                OpenRouterModelPicker()
                 if let error = settings.openRouterCredentialError {
                     Text(error)
                         .foregroundStyle(.red)
@@ -48,7 +46,7 @@ struct SettingsView: View {
             } header: {
                 Text("OpenRouter")
             } footer: {
-                Text("Used only for the news glance digest. The key is stored in Keychain. Default model is \(OpenRouterClient.defaultModel). Override with OPENROUTER_API_KEY / OPENROUTER_MODEL in the Xcode scheme.")
+                Text("Used only for the news glance digest. The key is stored in Keychain. Free models rotate; the list refreshes from OpenRouter. Default is \(OpenRouterClient.defaultModel). Override with OPENROUTER_API_KEY / OPENROUTER_MODEL in the Xcode scheme.")
             }
 
             Section {
@@ -138,6 +136,74 @@ struct SettingsView: View {
                 hermesStatus = error.localizedDescription
             }
             isCheckingHermes = false
+        }
+    }
+}
+
+private struct OpenRouterModelPicker: View {
+    @EnvironmentObject var settings: Settings
+    @State private var liveModels: [OpenRouterModelInfo] = []
+    @State private var usingCustom = false
+    @State private var listError: String?
+
+    private static let customSentinel = "__custom__"
+
+    private var models: [OpenRouterModelInfo] {
+        OpenRouterClient.pickerModels(live: liveModels, selected: usingCustom ? "" : settings.openRouterModel)
+    }
+
+    private var selection: String {
+        usingCustom ? Self.customSentinel : settings.openRouterModel
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Model", selection: pickerBinding) {
+                ForEach(models) { model in
+                    Text(model.name).tag(model.id)
+                }
+                Text("Custom…").tag(Self.customSentinel)
+            }
+            .pickerStyle(.menu)
+            if usingCustom {
+                TextField("provider/model:free", text: $settings.openRouterModel)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+            }
+            if let listError {
+                Text(listError)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .task { await refreshModels() }
+    }
+
+    private var pickerBinding: Binding<String> {
+        Binding(
+            get: { selection },
+            set: { newValue in
+                if newValue == Self.customSentinel {
+                    usingCustom = true
+                } else {
+                    usingCustom = false
+                    settings.openRouterModel = newValue
+                }
+            }
+        )
+    }
+
+    private func refreshModels() async {
+        do {
+            let fetched = try await OpenRouterClient.listFreeModels()
+            liveModels = fetched
+            listError = nil
+            if fetched.contains(where: { $0.id == settings.openRouterModel }) {
+                usingCustom = false
+            }
+        } catch {
+            listError = "Couldn't refresh the free-model list."
         }
     }
 }
