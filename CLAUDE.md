@@ -156,8 +156,8 @@ Keychain. Scheme overrides are `HERMES_API_URL` and `HERMES_API_KEY`.
 Settings can point spoken questions at OpenRouter instead of Hermes. COGOS
 embeds SwiftedMind SwiftAgent (`OpenAISession`) with `store: false` and the
 full transcript on every `POST /v1/responses` (OpenRouter is stateless).
-Client tools wrap EventKit / WeatherKit / `NativeLocation` / Gmail /
-OpenRouter web search. The glasses get
+Client tools wrap EventKit / WeatherKit / `NativeLocation` / IMAP mail
+(SwiftMail `IMAPServer`) / OpenRouter web search. The glasses get
 `respond()`'s final text via `EvenTextRenderer.pushReply` — not token
 streaming and never tool JSON. Transcript trim keeps the last 12 user
 prompts, dropping oldest turns from the front.
@@ -165,7 +165,9 @@ prompts, dropping oldest turns from the front.
 The OpenRouter key is the same Keychain item as the news digest
 (`OPENROUTER_API_KEY`). Agent model is `OPENROUTER_AGENT_MODEL` / Settings
 (default `google/gemini-2.5-flash`). News digest still uses cheap
-`chat/completions`. Glance payloads are never uploaded.
+`chat/completions`. Glance payloads are never uploaded. Mail uses SwiftMail
+over TLS IMAP (iCloud `imap.mail.me.com:993`); the password lives in Keychain
+(`IMAP_PASSWORD` / Settings), never in git.
 
 ---
 

@@ -19,7 +19,7 @@ final class OpenRouterSpokenAgent {
     let apiKey: String
     let model: String
     let sessionID: String
-    let gmailAccessToken: String
+    let imap: IMAPCredentials
 
     private var session: OpenAISession<NoSchema>
 
@@ -28,17 +28,17 @@ final class OpenRouterSpokenAgent {
         model: String,
         sessionID: String,
         location: NativeLocation,
-        gmailAccessToken: String
+        imap: IMAPCredentials
     ) {
         self.apiKey = apiKey
         self.model = model
         self.sessionID = sessionID
-        self.gmailAccessToken = gmailAccessToken
+        self.imap = imap
         let device = AgentDeviceContext(
             location: location,
             openRouterAPIKey: apiKey,
             openRouterModel: model,
-            gmailAccessToken: gmailAccessToken
+            imap: imap
         )
         self.session = OpenAISession(
             tools: CalendarTool(context: device),
@@ -54,8 +54,8 @@ final class OpenRouterSpokenAgent {
         )
     }
 
-    func matches(apiKey: String, model: String, gmailAccessToken: String) -> Bool {
-        self.apiKey == apiKey && self.model == model && self.gmailAccessToken == gmailAccessToken
+    func matches(apiKey: String, model: String, imap: IMAPCredentials) -> Bool {
+        self.apiKey == apiKey && self.model == model && self.imap == imap
     }
 
     func respond(to query: String) async throws -> String {

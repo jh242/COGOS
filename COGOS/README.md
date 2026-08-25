@@ -30,7 +30,7 @@ sends only final speech transcripts and renders streamed final-answer text.
 Settings → Spoken assistant can switch the glasses question path from Hermes
 to OpenRouter. That path uses [SwiftAgent](https://github.com/SwiftedMind/SwiftAgent)
 (`OpenAISession`) against `https://openrouter.ai/api/v1/responses`. The phone
-owns the tool loop (calendar, weather, location, Gmail, and web search), resends
+owns the tool loop (calendar, weather, location, IMAP mail, and web search), resends
 the full transcript every turn, and pushes the finished answer to the glasses
 scroller — it does not stream tokens or tool JSON to the waveguide.
 
@@ -38,8 +38,10 @@ Use a tool-capable model (default `google/gemini-2.5-flash`), not the news
 digest free model. The same OpenRouter key is stored in Keychain
 (`OPENROUTER_API_KEY`). Override the agent slug with `OPENROUTER_AGENT_MODEL`.
 Web search uses OpenRouter's `openrouter:web_search` server tool. Mail search
-needs a Gmail OAuth access token with `gmail.readonly` (`GMAIL_ACCESS_TOKEN`
-or Settings).
+uses [SwiftMail](https://github.com/Cocoanetics/SwiftMail) over TLS IMAP
+(iCloud default `imap.mail.me.com:993`). Store an app-specific password in
+Settings / Keychain, not the Apple ID password. Overrides: `IMAP_HOST`,
+`IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD`, `IMAP_MAILBOX`.
 
 The news glance still uses a separate cheap chat completion
 (`poolside/laguna-xs-2.1:free` by default) to turn RSS headlines into a
@@ -56,7 +58,7 @@ COGOS/
 ├── Protocol/          Proto, EvenAIText54, DashboardProto, QuickNoteProto, CRC32XZ
 ├── Session/           EvenAISession, EvenTextRenderer, VoiceCaptureController,
 │                      SpeechStreamRecognizer, PcmConverter, LC3 codec
-├── API/               HermesClient, OpenRouterClient, SSEParser
+├── API/               HermesClient, OpenRouterClient, IMAPClient, SSEParser
 ├── Agent/             OpenRouter SwiftAgent session, device tools
 ├── Glance/            GlanceService + Sources/
 ├── Platform/          NativeLocation, Settings, NotificationWhitelist

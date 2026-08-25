@@ -12,6 +12,10 @@ final class SettingsCommuteLocationsTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: "openrouter_model")
         UserDefaults.standard.removeObject(forKey: "openrouter_agent_model")
         UserDefaults.standard.removeObject(forKey: "spoken_backend")
+        UserDefaults.standard.removeObject(forKey: "imap_host")
+        UserDefaults.standard.removeObject(forKey: "imap_port")
+        UserDefaults.standard.removeObject(forKey: "imap_username")
+        UserDefaults.standard.removeObject(forKey: "imap_mailbox")
     }
 
     func testNewsTopicDefaultsToTopStories() {
@@ -31,7 +35,11 @@ final class SettingsCommuteLocationsTests: XCTestCase {
         XCTAssertEqual(s.openRouterModel, OpenRouterClient.defaultModel)
         XCTAssertEqual(s.openRouterAgentModel, OpenRouterClient.defaultAgentModel)
         XCTAssertEqual(s.spokenBackend, .hermes)
-        XCTAssertEqual(s.gmailAccessToken, "")
+        XCTAssertEqual(s.imapHost, IMAPCredentials.iCloudHost)
+        XCTAssertEqual(s.imapPort, IMAPCredentials.defaultPort)
+        XCTAssertEqual(s.imapMailbox, IMAPCredentials.defaultMailbox)
+        XCTAssertEqual(s.imapUsername, "")
+        XCTAssertFalse(s.imapCredentials().isConfigured)
     }
 
     func testSpokenBackendAndAgentModelRoundTrip() {

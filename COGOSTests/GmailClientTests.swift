@@ -2,33 +2,6 @@ import Foundation
 import XCTest
 @testable import COGOS
 
-final class GmailClientTests: XCTestCase {
-    func testParseMessageIDs() throws {
-        let json = Data(#"{"messages":[{"id":"aaa","threadId":"t1"},{"id":"bbb","threadId":"t2"}]}"#.utf8)
-        XCTAssertEqual(try GmailClient.parseMessageIDs(from: json), ["aaa", "bbb"])
-    }
-
-    func testParseMessageIDsEmptyInbox() throws {
-        XCTAssertEqual(try GmailClient.parseMessageIDs(from: Data(#"{}"#.utf8)), [])
-    }
-
-    func testParseSummaryReadsHeadersAndSnippet() throws {
-        let json = Data("""
-        {"snippet":"See you at 3","payload":{"headers":[
-          {"name":"From","value":"Ada <ada@example.com>"},
-          {"name":"Subject","value":"Lunch"},
-          {"name":"Date","value":"Tue, 25 Aug 2026 10:00:00 -0700"}
-        ]}}
-        """.utf8)
-        let summary = try GmailClient.parseSummary(from: json)
-        XCTAssertEqual(summary.from, "Ada <ada@example.com>")
-        XCTAssertEqual(summary.subject, "Lunch")
-        XCTAssertEqual(summary.snippet, "See you at 3")
-        XCTAssertTrue(summary.formattedLine.contains("Lunch"))
-        XCTAssertTrue(summary.formattedLine.contains("Ada"))
-    }
-}
-
 final class OpenRouterWebSearchTests: XCTestCase {
     override func tearDown() {
         OpenRouterWebSearchMockURLProtocol.handler = nil

@@ -209,7 +209,7 @@ final class EvenAISession: ObservableObject {
         if let spokenAgent, spokenAgent.matches(
             apiKey: credentials.apiKey,
             model: credentials.model,
-            gmailAccessToken: settings.gmailToken()
+            imap: settings.imapCredentials()
         ) {
             return spokenAgent
         }
@@ -218,7 +218,7 @@ final class EvenAISession: ObservableObject {
             model: credentials.model,
             sessionID: settings.hermesConversationID,
             location: location,
-            gmailAccessToken: settings.gmailToken()
+            imap: settings.imapCredentials()
         )
         spokenAgent = agent
         return agent

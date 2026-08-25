@@ -3,12 +3,12 @@ import FoundationModels
 
 struct MailTool: Tool {
     let name = "search_mail"
-    let description = "Search the wearer's Gmail. Use Gmail search syntax when helpful, such as from:name, subject:word, is:unread, newer_than:2d."
+    let description = "Search the wearer's IMAP mailbox (iCloud or other). Use from:name, subject:word, is:unread, newer_than:2d, or plain text. Empty query returns the newest messages."
     let context: AgentDeviceContext
 
     @Generable
     struct Arguments {
-        @Guide(description: "Gmail search query. Use in:inbox if the user just wants recent mail.")
+        @Guide(description: "Mail search query. Empty or in:inbox returns the newest messages.")
         var query: String
     }
 

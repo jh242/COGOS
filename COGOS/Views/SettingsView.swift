@@ -7,6 +7,8 @@ struct SettingsView: View {
     @State private var isCheckingHermes = false
     @State private var openRouterStatus: String?
     @State private var isCheckingOpenRouter = false
+    @State private var imapStatus: String?
+    @State private var isCheckingIMAP = false
 
     var body: some View {
         Form {
@@ -19,7 +21,7 @@ struct SettingsView: View {
             } header: {
                 Text("Spoken assistant")
             } footer: {
-                Text("Hermes keeps tools on your VPS. OpenRouter runs SwiftAgent on the phone with calendar, weather, location, Gmail, and web search. Long answers scroll on the glasses.")
+                Text("Hermes keeps tools on your VPS. OpenRouter runs SwiftAgent on the phone with calendar, weather, location, IMAP mail, and web search. Long answers scroll on the glasses.")
             }
 
             Section {
@@ -73,17 +75,38 @@ struct SettingsView: View {
             }
 
             Section {
-                SecureField("Gmail access token", text: $settings.gmailAccessToken)
+                TextField("IMAP host", text: $settings.imapHost)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                if let error = settings.gmailCredentialError {
+                    .keyboardType(.URL)
+                TextField("Port", value: $settings.imapPort, format: .number)
+                    .keyboardType(.numberPad)
+                TextField("Username", text: $settings.imapUsername)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.emailAddress)
+                SecureField("App-specific password", text: $settings.imapPassword)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Mailbox", text: $settings.imapMailbox)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button(isCheckingIMAP ? "Checking..." : "Test mailbox") {
+                    testIMAPConnection()
+                }
+                .disabled(isCheckingIMAP || !settings.imapCredentials().isConfigured)
+                if let imapStatus {
+                    Text(imapStatus)
+                        .foregroundStyle(.secondary)
+                }
+                if let error = settings.imapCredentialError {
                     Text(error)
                         .foregroundStyle(.red)
                 }
             } header: {
-                Text("Gmail")
+                Text("Mail (IMAP)")
             } footer: {
-                Text("Optional. OAuth access token with gmail.readonly so the spoken agent can search mail. Stored in Keychain. Override with GMAIL_ACCESS_TOKEN.")
+                Text("Optional. TLS IMAP so the spoken agent can search mail. iCloud default is imap.mail.me.com:993 with an app-specific password from appleid.apple.com, not your Apple ID password. Gmail: imap.gmail.com plus an app password. Password is stored in Keychain. Overrides: IMAP_HOST, IMAP_PORT, IMAP_USER, IMAP_PASSWORD, IMAP_MAILBOX.")
             }
 
             Section {
@@ -187,6 +210,21 @@ struct SettingsView: View {
                 openRouterStatus = error.localizedDescription
             }
             isCheckingOpenRouter = false
+        }
+    }
+
+    private func testIMAPConnection() {
+        let credentials = settings.imapCredentials()
+        guard credentials.isConfigured else { return }
+        isCheckingIMAP = true
+        imapStatus = nil
+        Task {
+            do {
+                imapStatus = try await IMAPClient(credentials: credentials).probe()
+            } catch {
+                imapStatus = error.localizedDescription
+            }
+            isCheckingIMAP = false
         }
     }
 }

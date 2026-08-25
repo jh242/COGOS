@@ -13,18 +13,18 @@ final class AgentDeviceContext {
     private var calendarAccess: Bool?
     private let openRouterAPIKey: String
     private let openRouterModel: String
-    private let gmailAccessToken: String
+    private let imap: IMAPCredentials
 
     init(
         location: NativeLocation,
         openRouterAPIKey: String,
         openRouterModel: String,
-        gmailAccessToken: String
+        imap: IMAPCredentials
     ) {
         self.location = location
         self.openRouterAPIKey = openRouterAPIKey
         self.openRouterModel = openRouterModel
-        self.gmailAccessToken = gmailAccessToken
+        self.imap = imap
     }
 
     func placeSummary() async -> String {
@@ -129,12 +129,11 @@ final class AgentDeviceContext {
     }
 
     func mailSearch(query: String) async -> String {
-        let token = gmailAccessToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty else {
-            return GmailClientError.notConfigured.localizedDescription
+        guard imap.isConfigured else {
+            return IMAPClientError.notConfigured.localizedDescription
         }
         do {
-            return try await GmailClient(accessToken: token).search(query: query)
+            return try await IMAPClient(credentials: imap).search(query: query)
         } catch {
             return "Mail search failed: \(error.localizedDescription)"
         }

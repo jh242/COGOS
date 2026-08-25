@@ -32,7 +32,7 @@ final class Settings: ObservableObject {
     private let defaults = UserDefaults.standard
     private let hermesCredentials = KeychainCredentialStore(account: "hermes_api_token")
     private let openRouterCredentials = KeychainCredentialStore(account: "openrouter_api_key")
-    private let gmailCredentials = KeychainCredentialStore(account: "gmail_access_token")
+    private let imapCredentialsStore = KeychainCredentialStore(account: "imap_password")
 
     @Published var hermesURL: String { didSet { defaults.set(hermesURL, forKey: "hermes_api_url") } }
     @Published var hermesToken: String {
@@ -49,13 +49,26 @@ final class Settings: ObservableObject {
         }
     }
     @Published private(set) var openRouterCredentialError: String?
-    @Published var gmailAccessToken: String {
+    @Published var imapHost: String { didSet { defaults.set(imapHost, forKey: "imap_host") } }
+    @Published var imapPort: Int {
         didSet {
-            let status = gmailCredentials.write(gmailAccessToken)
-            gmailCredentialError = status == errSecSuccess ? nil : "Could not save Gmail token to Keychain (\(status))."
+            let clamped = min(max(imapPort, 1), 65_535)
+            if clamped != imapPort {
+                imapPort = clamped
+                return
+            }
+            defaults.set(imapPort, forKey: "imap_port")
         }
     }
-    @Published private(set) var gmailCredentialError: String?
+    @Published var imapUsername: String { didSet { defaults.set(imapUsername, forKey: "imap_username") } }
+    @Published var imapMailbox: String { didSet { defaults.set(imapMailbox, forKey: "imap_mailbox") } }
+    @Published var imapPassword: String {
+        didSet {
+            let status = imapCredentialsStore.write(imapPassword)
+            imapCredentialError = status == errSecSuccess ? nil : "Could not save IMAP password to Keychain (\(status))."
+        }
+    }
+    @Published private(set) var imapCredentialError: String?
     @Published var openRouterModel: String { didSet { defaults.set(openRouterModel, forKey: "openrouter_model") } }
     @Published var openRouterAgentModel: String {
         didSet { defaults.set(openRouterAgentModel, forKey: "openrouter_agent_model") }
@@ -89,7 +102,17 @@ final class Settings: ObservableObject {
         self.hermesURL = defaults.string(forKey: "hermes_api_url") ?? ""
         self.hermesToken = hermesCredentials.read()
         self.openRouterAPIKey = openRouterCredentials.read()
-        self.gmailAccessToken = gmailCredentials.read()
+        let storedHost = defaults.string(forKey: "imap_host")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.imapHost = storedHost.isEmpty ? IMAPCredentials.iCloudHost : storedHost
+        let storedPort = defaults.object(forKey: "imap_port") as? Int ?? IMAPCredentials.defaultPort
+        self.imapPort = (1...65_535).contains(storedPort) ? storedPort : IMAPCredentials.defaultPort
+        self.imapUsername = defaults.string(forKey: "imap_username") ?? ""
+        let storedMailbox = defaults.string(forKey: "imap_mailbox")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.imapMailbox = storedMailbox.isEmpty ? IMAPCredentials.defaultMailbox : storedMailbox
+        self.imapPassword = imapCredentialsStore.read()
+        KeychainCredentialStore(account: "gmail_access_token").write("")
         let storedModel = defaults.string(forKey: "openrouter_model")?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.openRouterModel = storedModel.isEmpty ? OpenRouterClient.defaultModel : storedModel
@@ -190,14 +213,40 @@ final class Settings: ObservableObject {
             model: credentials.model,
             sessionID: hermesConversationID,
             location: location,
-            gmailAccessToken: gmailToken()
+            imap: imapCredentials()
         )
     }
 
-    func gmailToken() -> String {
+    func imapCredentials() -> IMAPCredentials {
         let env = ProcessInfo.processInfo.environment
-        let envToken = env["GMAIL_ACCESS_TOKEN"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return envToken.isEmpty ? gmailAccessToken.trimmingCharacters(in: .whitespacesAndNewlines) : envToken
+        func envValue(_ key: String) -> String {
+            env[key]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        }
+        let host = envValue("IMAP_HOST").isEmpty
+            ? imapHost.trimmingCharacters(in: .whitespacesAndNewlines)
+            : envValue("IMAP_HOST")
+        let port: Int
+        if let envPort = Int(envValue("IMAP_PORT")), (1...65_535).contains(envPort) {
+            port = envPort
+        } else {
+            port = imapPort
+        }
+        let username = envValue("IMAP_USER").isEmpty
+            ? imapUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+            : envValue("IMAP_USER")
+        let password = envValue("IMAP_PASSWORD").isEmpty
+            ? imapPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+            : envValue("IMAP_PASSWORD")
+        let mailbox = envValue("IMAP_MAILBOX").isEmpty
+            ? imapMailbox.trimmingCharacters(in: .whitespacesAndNewlines)
+            : envValue("IMAP_MAILBOX")
+        return IMAPCredentials(
+            host: host.isEmpty ? IMAPCredentials.iCloudHost : host,
+            port: port,
+            username: username,
+            password: password,
+            mailbox: mailbox.isEmpty ? IMAPCredentials.defaultMailbox : mailbox
+        )
     }
 
     func openRouterAgentCredentials() -> (apiKey: String, model: String)? {
