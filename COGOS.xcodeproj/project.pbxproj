@@ -119,6 +119,7 @@
 		0358A3120097AC9A7C6C9644 /* PcmConverter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PcmConverter.m; sourceTree = "<group>"; };
 		040757D952D81EB4EB06BEAB /* CommuteFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteFormatterTests.swift; sourceTree = "<group>"; };
 		04393FBDC617F77322CEE340 /* sns.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = sns.h; sourceTree = "<group>"; };
+		06D96388619AE2B84D3C3408 /* ci_pre_xcodebuild.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = ci_pre_xcodebuild.sh; sourceTree = "<group>"; };
 		083F9CAC3CE27674F2A039ED /* WeatherSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherSource.swift; sourceTree = "<group>"; };
 		0B883E31605D36CB9C7933E5 /* COGOSAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = COGOSAppIntents.swift; sourceTree = "<group>"; };
 		0EE01BB747026B40560B8E29 /* bits.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bits.h; sourceTree = "<group>"; };
@@ -154,6 +155,7 @@
 		3B37841C194DD596A694DF6B /* lc3.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lc3.h; sourceTree = "<group>"; };
 		3F17494F778238B379A6E138 /* OpenRouterClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClientTests.swift; sourceTree = "<group>"; };
 		3F68B515CB2A75C34796AB4E /* SettingsCommuteLocationsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCommuteLocationsTests.swift; sourceTree = "<group>"; };
+		400CB4BB6525A41DAB61CE07 /* macros.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = macros.json; sourceTree = "<group>"; };
 		44B0BF405104719EB8E060F0 /* spec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = spec.h; sourceTree = "<group>"; };
 		451F63B52390F68A0B95D099 /* CommuteSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteSource.swift; sourceTree = "<group>"; };
 		454947BB17B3ECB149A61945 /* KeychainCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainCredentialStore.swift; sourceTree = "<group>"; };
@@ -169,6 +171,7 @@
 		539B53C58AE4A494B0BCF655 /* IMAPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPClient.swift; sourceTree = "<group>"; };
 		544C153918CAFC78B3B9951C /* ltpf_arm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ltpf_arm.h; sourceTree = "<group>"; };
 		596B6DAF76A720ADDF1C2BFF /* rnnoise.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = rnnoise.h; sourceTree = "<group>"; };
+		5C3D69CD9290532257152148 /* ci_post_clone.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = ci_post_clone.sh; sourceTree = "<group>"; };
 		5ECBC531930C906486296B1C /* MailTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailTool.swift; sourceTree = "<group>"; };
 		60275CF4FB1B39A55310F9A6 /* bwdet.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bwdet.h; sourceTree = "<group>"; };
 		60BCBC2CDEF9DD2824ACFDDB /* IMAPClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPClientTests.swift; sourceTree = "<group>"; };
@@ -210,6 +213,7 @@
 		B1CADF95E8AEEC032E84E3C6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B4D36758602335C4BA63ACB0 /* tables.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = tables.h; sourceTree = "<group>"; };
 		B5B695492CC6171FC8FAC05A /* WeatherKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WeatherKit.framework; path = System/Library/Frameworks/WeatherKit.framework; sourceTree = SDKROOT; };
+		B6A0D3F0ADF753D20967221B /* trust_macros.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = trust_macros.sh; sourceTree = "<group>"; };
 		B73561314F90501277D6F481 /* tables.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tables.c; sourceTree = "<group>"; };
 		B9AFB6766B48A69DC9C88BC1 /* SpeechStreamRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechStreamRecognizer.swift; sourceTree = "<group>"; };
 		BE717038BC69FDB4A0412449 /* Proto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Proto.swift; sourceTree = "<group>"; };
@@ -270,6 +274,7 @@
 		20870FF9F0D3A867526F309C = {
 			isa = PBXGroup;
 			children = (
+				58270A0298F99193CF5F93AF /* ci_scripts */,
 				80ADCA5D08602D81A96EF623 /* COGOS */,
 				54BF2DF3DF72E059014CDEE4 /* COGOSTests */,
 				10361469AF5AAC73C415D6A5 /* Frameworks */,
@@ -325,6 +330,17 @@
 				23BC1BA8F05EB6A05F902FC0 /* Smoke.swift */,
 			);
 			path = COGOSTests;
+			sourceTree = "<group>";
+		};
+		58270A0298F99193CF5F93AF /* ci_scripts */ = {
+			isa = PBXGroup;
+			children = (
+				5C3D69CD9290532257152148 /* ci_post_clone.sh */,
+				06D96388619AE2B84D3C3408 /* ci_pre_xcodebuild.sh */,
+				400CB4BB6525A41DAB61CE07 /* macros.json */,
+				B6A0D3F0ADF753D20967221B /* trust_macros.sh */,
+			);
+			path = ci_scripts;
 			sourceTree = "<group>";
 		};
 		5E21880841013CF85486F583 /* BLE */ = {
