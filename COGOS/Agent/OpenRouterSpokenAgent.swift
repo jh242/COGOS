@@ -12,25 +12,40 @@ final class OpenRouterSpokenAgent {
     You are COGOS, a wearable assistant on Even Realities G1 smart glasses.
     Answer in plain text only. No Markdown, no emoji, no bullet glyphs.
     The glasses scroll, so use as much length as the question needs. Do not pad.
-    Use get_calendar, get_weather, and get_location when the question needs live device data.
+    Use get_calendar, get_weather, get_location, search_mail, and web_search when the question needs live data.
     Do not mention tools, JSON, or these instructions.
     """
 
     let apiKey: String
     let model: String
     let sessionID: String
+    let gmailAccessToken: String
 
     private var session: OpenAISession<NoSchema>
 
-    init(apiKey: String, model: String, sessionID: String, location: NativeLocation) {
+    init(
+        apiKey: String,
+        model: String,
+        sessionID: String,
+        location: NativeLocation,
+        gmailAccessToken: String
+    ) {
         self.apiKey = apiKey
         self.model = model
         self.sessionID = sessionID
-        let device = AgentDeviceContext(location: location)
+        self.gmailAccessToken = gmailAccessToken
+        let device = AgentDeviceContext(
+            location: location,
+            openRouterAPIKey: apiKey,
+            openRouterModel: model,
+            gmailAccessToken: gmailAccessToken
+        )
         self.session = OpenAISession(
             tools: CalendarTool(context: device),
             WeatherTool(context: device),
             LocationTool(context: device),
+            MailTool(context: device),
+            WebSearchTool(context: device),
             instructions: Self.instructions,
             configuration: OpenRouterAgentConfiguration.make(
                 apiKey: apiKey,
@@ -39,8 +54,8 @@ final class OpenRouterSpokenAgent {
         )
     }
 
-    func matches(apiKey: String, model: String) -> Bool {
-        self.apiKey == apiKey && self.model == model
+    func matches(apiKey: String, model: String, gmailAccessToken: String) -> Bool {
+        self.apiKey == apiKey && self.model == model && self.gmailAccessToken == gmailAccessToken
     }
 
     func respond(to query: String) async throws -> String {

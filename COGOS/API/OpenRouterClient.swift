@@ -121,6 +121,50 @@ struct OpenRouterClient: Sendable {
         return text
     }
 
+    /// Runs OpenRouter's `openrouter:web_search` server tool and returns the
+    /// model's grounded summary. Used by the spoken agent's `web_search` tool.
+    func searchWeb(query: String) async throws -> String {
+        let body = WebSearchRequest(
+            model: model,
+            messages: [
+                ChatMessage(
+                    role: "system",
+                    content: "Return a compact plain-text briefing of the search results. No Markdown."
+                ),
+                ChatMessage(role: "user", content: query)
+            ],
+            tools: [
+                WebSearchServerTool(
+                    parameters: .init(maxResults: 5, maxUses: 2)
+                )
+            ],
+            stream: false
+        )
+
+        var request = URLRequest(url: endpoint("chat/completions"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.httpBody = try JSONEncoder().encode(body)
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(httpReferer, forHTTPHeaderField: "HTTP-Referer")
+        request.setValue(appTitle, forHTTPHeaderField: "X-Title")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenRouterClientError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw Self.httpError(statusCode: http.statusCode, body: data)
+        }
+
+        let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
+        let text = decoded.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !text.isEmpty else { throw OpenRouterClientError.emptyResponse }
+        return text
+    }
+
     /// Authenticated catalog ping used by Settings → Test connection.
     func checkConnection() async throws -> String {
         var request = URLRequest(url: endpoint("models"))
@@ -247,6 +291,28 @@ struct OpenRouterClient: Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !oneLine.isEmpty else { return nil }
         return String(oneLine.prefix(240))
+    }
+}
+
+private struct WebSearchRequest: Encodable {
+    let model: String
+    let messages: [ChatMessage]
+    let tools: [WebSearchServerTool]
+    let stream: Bool
+}
+
+private struct WebSearchServerTool: Encodable {
+    let type = "openrouter:web_search"
+    let parameters: Parameters
+
+    struct Parameters: Encodable {
+        let maxResults: Int
+        let maxUses: Int
+
+        enum CodingKeys: String, CodingKey {
+            case maxResults = "max_results"
+            case maxUses = "max_uses"
+        }
     }
 }
 

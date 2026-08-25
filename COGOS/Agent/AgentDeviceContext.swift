@@ -11,9 +11,20 @@ final class AgentDeviceContext {
     private let eventStore = EKEventStore()
     private let weatherService = WeatherService.shared
     private var calendarAccess: Bool?
+    private let openRouterAPIKey: String
+    private let openRouterModel: String
+    private let gmailAccessToken: String
 
-    init(location: NativeLocation) {
+    init(
+        location: NativeLocation,
+        openRouterAPIKey: String,
+        openRouterModel: String,
+        gmailAccessToken: String
+    ) {
         self.location = location
+        self.openRouterAPIKey = openRouterAPIKey
+        self.openRouterModel = openRouterModel
+        self.gmailAccessToken = gmailAccessToken
     }
 
     func placeSummary() async -> String {
@@ -99,5 +110,33 @@ final class AgentDeviceContext {
         let granted = (try? await eventStore.requestFullAccessToEvents()) ?? false
         calendarAccess = granted
         return granted
+    }
+
+    func webSearch(query: String) async -> String {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "No search query provided." }
+        guard !openRouterAPIKey.isEmpty else {
+            return "OpenRouter is not configured, so web search is unavailable."
+        }
+        do {
+            return try await OpenRouterClient(
+                apiKey: openRouterAPIKey,
+                model: openRouterModel
+            ).searchWeb(query: trimmed)
+        } catch {
+            return "Web search failed: \(error.localizedDescription)"
+        }
+    }
+
+    func mailSearch(query: String) async -> String {
+        let token = gmailAccessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            return GmailClientError.notConfigured.localizedDescription
+        }
+        do {
+            return try await GmailClient(accessToken: token).search(query: query)
+        } catch {
+            return "Mail search failed: \(error.localizedDescription)"
+        }
     }
 }

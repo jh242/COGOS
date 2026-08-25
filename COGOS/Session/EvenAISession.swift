@@ -206,14 +206,19 @@ final class EvenAISession: ObservableObject {
             spokenAgent = nil
             return nil
         }
-        if let spokenAgent, spokenAgent.matches(apiKey: credentials.apiKey, model: credentials.model) {
+        if let spokenAgent, spokenAgent.matches(
+            apiKey: credentials.apiKey,
+            model: credentials.model,
+            gmailAccessToken: settings.gmailToken()
+        ) {
             return spokenAgent
         }
         let agent = OpenRouterSpokenAgent(
             apiKey: credentials.apiKey,
             model: credentials.model,
             sessionID: settings.hermesConversationID,
-            location: location
+            location: location,
+            gmailAccessToken: settings.gmailToken()
         )
         spokenAgent = agent
         return agent

@@ -32,6 +32,7 @@ final class Settings: ObservableObject {
     private let defaults = UserDefaults.standard
     private let hermesCredentials = KeychainCredentialStore(account: "hermes_api_token")
     private let openRouterCredentials = KeychainCredentialStore(account: "openrouter_api_key")
+    private let gmailCredentials = KeychainCredentialStore(account: "gmail_access_token")
 
     @Published var hermesURL: String { didSet { defaults.set(hermesURL, forKey: "hermes_api_url") } }
     @Published var hermesToken: String {
@@ -48,6 +49,13 @@ final class Settings: ObservableObject {
         }
     }
     @Published private(set) var openRouterCredentialError: String?
+    @Published var gmailAccessToken: String {
+        didSet {
+            let status = gmailCredentials.write(gmailAccessToken)
+            gmailCredentialError = status == errSecSuccess ? nil : "Could not save Gmail token to Keychain (\(status))."
+        }
+    }
+    @Published private(set) var gmailCredentialError: String?
     @Published var openRouterModel: String { didSet { defaults.set(openRouterModel, forKey: "openrouter_model") } }
     @Published var openRouterAgentModel: String {
         didSet { defaults.set(openRouterAgentModel, forKey: "openrouter_agent_model") }
@@ -81,6 +89,7 @@ final class Settings: ObservableObject {
         self.hermesURL = defaults.string(forKey: "hermes_api_url") ?? ""
         self.hermesToken = hermesCredentials.read()
         self.openRouterAPIKey = openRouterCredentials.read()
+        self.gmailAccessToken = gmailCredentials.read()
         let storedModel = defaults.string(forKey: "openrouter_model")?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.openRouterModel = storedModel.isEmpty ? OpenRouterClient.defaultModel : storedModel
@@ -180,8 +189,15 @@ final class Settings: ObservableObject {
             apiKey: credentials.apiKey,
             model: credentials.model,
             sessionID: hermesConversationID,
-            location: location
+            location: location,
+            gmailAccessToken: gmailToken()
         )
+    }
+
+    func gmailToken() -> String {
+        let env = ProcessInfo.processInfo.environment
+        let envToken = env["GMAIL_ACCESS_TOKEN"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return envToken.isEmpty ? gmailAccessToken.trimmingCharacters(in: .whitespacesAndNewlines) : envToken
     }
 
     func openRouterAgentCredentials() -> (apiKey: String, model: String)? {

@@ -31,6 +31,7 @@ final class SettingsCommuteLocationsTests: XCTestCase {
         XCTAssertEqual(s.openRouterModel, OpenRouterClient.defaultModel)
         XCTAssertEqual(s.openRouterAgentModel, OpenRouterClient.defaultAgentModel)
         XCTAssertEqual(s.spokenBackend, .hermes)
+        XCTAssertEqual(s.gmailAccessToken, "")
     }
 
     func testSpokenBackendAndAgentModelRoundTrip() {

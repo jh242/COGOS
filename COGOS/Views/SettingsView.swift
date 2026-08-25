@@ -19,7 +19,7 @@ struct SettingsView: View {
             } header: {
                 Text("Spoken assistant")
             } footer: {
-                Text("Hermes keeps tools on your VPS. OpenRouter runs SwiftAgent on the phone with calendar, weather, and location tools. Long answers scroll on the glasses.")
+                Text("Hermes keeps tools on your VPS. OpenRouter runs SwiftAgent on the phone with calendar, weather, location, Gmail, and web search. Long answers scroll on the glasses.")
             }
 
             Section {
@@ -70,6 +70,20 @@ struct SettingsView: View {
                 Text("OpenRouter")
             } footer: {
                 Text("One key in Keychain. News digest uses a cheap free model (default \(OpenRouterClient.defaultModel)). Spoken questions use a tool-capable model (default \(OpenRouterClient.defaultAgentModel)). Override with OPENROUTER_API_KEY, OPENROUTER_MODEL, or OPENROUTER_AGENT_MODEL.")
+            }
+
+            Section {
+                SecureField("Gmail access token", text: $settings.gmailAccessToken)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if let error = settings.gmailCredentialError {
+                    Text(error)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("Gmail")
+            } footer: {
+                Text("Optional. OAuth access token with gmail.readonly so the spoken agent can search mail. Stored in Keychain. Override with GMAIL_ACCESS_TOKEN.")
             }
 
             Section {
