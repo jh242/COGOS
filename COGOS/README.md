@@ -15,6 +15,14 @@ open COGOS.xcodeproj
 
 Then build & run on a physical device (BLE can't be simulated).
 
+Cloud agents (Linux) install Swift + XcodeGen and compile IMAP/SwiftMail with:
+
+```bash
+./scripts/cloud-compile.sh
+```
+
+That generates `COGOS.xcodeproj` and typechecks the mail client against SwiftMail. Full iOS `xcodebuild` still needs a Mac.
+
 If you modify the project structure (add/remove files, change build settings),
 edit `project.yml` and re-run `xcodegen generate`.
 

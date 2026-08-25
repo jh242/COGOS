@@ -2,8 +2,6 @@
 .DS_Store
 
 # Xcode
-build/
-DerivedData/
 *.xcuserstate
 xcuserdata/
 *.xcworkspace/xcuserdata/
@@ -24,6 +22,9 @@ xcuserdata/
 .build/
 Packages/
 Package.resolved
+
+# Generated Linux compile copies
+scripts/linux-compile/Sources/
 
 # CocoaPods (unused but ignore if ever introduced)
 Pods/
