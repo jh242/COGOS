@@ -35,6 +35,23 @@ struct SettingsView: View {
             }
 
             Section {
+                SecureField("API key", text: $settings.openRouterAPIKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Model", text: $settings.openRouterModel)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if let error = settings.openRouterCredentialError {
+                    Text(error)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("OpenRouter")
+            } footer: {
+                Text("Used only for the news glance digest. The key is stored in Keychain. Default model is \(OpenRouterClient.defaultModel). Override with OPENROUTER_API_KEY / OPENROUTER_MODEL in the Xcode scheme.")
+            }
+
+            Section {
                 Stepper(value: $settings.silenceThreshold, in: 1...5) {
                     LabeledContent("Silence detection", value: "\(settings.silenceThreshold)s")
                 }

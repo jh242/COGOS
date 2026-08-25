@@ -30,16 +30,28 @@ struct CommuteLocation: Codable, Equatable, Identifiable {
 @MainActor
 final class Settings: ObservableObject {
     private let defaults = UserDefaults.standard
-    private let credentialStore = HermesCredentialStore()
+    private let hermesCredentials = KeychainCredentialStore(account: "hermes_api_token")
+    private let openRouterCredentials = KeychainCredentialStore(account: "openrouter_api_key")
 
     @Published var hermesURL: String { didSet { defaults.set(hermesURL, forKey: "hermes_api_url") } }
     @Published var hermesToken: String {
         didSet {
-            let status = credentialStore.write(hermesToken)
+            let status = hermesCredentials.write(hermesToken)
             hermesCredentialError = status == errSecSuccess ? nil : "Could not save token to Keychain (\(status))."
         }
     }
     @Published private(set) var hermesCredentialError: String?
+    @Published var openRouterAPIKey: String {
+        didSet {
+            let status = openRouterCredentials.write(openRouterAPIKey)
+            openRouterCredentialError = status == errSecSuccess ? nil : "Could not save OpenRouter key to Keychain (\(status))."
+        }
+    }
+    @Published private(set) var openRouterCredentialError: String?
+    @Published var openRouterModel: String { didSet { defaults.set(openRouterModel, forKey: "openrouter_model") } }
+    @Published var newsTopic: NewsTopic {
+        didSet { defaults.set(newsTopic.rawValue, forKey: "news_topic") }
+    }
     @Published var silenceThreshold: Int { didSet { defaults.set(silenceThreshold, forKey: "silence_threshold") } }
     @Published var headUpAngle: Int { didSet { defaults.set(headUpAngle, forKey: "head_up_angle") } }
     @Published var brightness: Int { didSet { defaults.set(brightness, forKey: "display_brightness") } }
@@ -61,7 +73,16 @@ final class Settings: ObservableObject {
 
     init() {
         self.hermesURL = defaults.string(forKey: "hermes_api_url") ?? ""
-        self.hermesToken = credentialStore.read()
+        self.hermesToken = hermesCredentials.read()
+        self.openRouterAPIKey = openRouterCredentials.read()
+        let storedModel = defaults.string(forKey: "openrouter_model")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.openRouterModel = storedModel.isEmpty ? OpenRouterClient.defaultModel : storedModel
+        if let raw = defaults.string(forKey: "news_topic"), let topic = NewsTopic(rawValue: raw) {
+            self.newsTopic = topic
+        } else {
+            self.newsTopic = .top
+        }
         if let existing = defaults.string(forKey: "hermes_conversation_id") {
             self.hermesConversationID = existing
         } else {
@@ -109,6 +130,20 @@ final class Settings: ObservableObject {
             accessToken: token,
             conversationID: hermesConversationID,
             sessionKey: hermesConversationID,
+            session: session
+        )
+    }
+
+    func makeOpenRouterClient(session: URLSession = .shared) -> OpenRouterClient? {
+        let env = ProcessInfo.processInfo.environment
+        let envKey = env["OPENROUTER_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let envModel = env["OPENROUTER_MODEL"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let token = envKey.isEmpty ? openRouterAPIKey.trimmingCharacters(in: .whitespacesAndNewlines) : envKey
+        let model = envModel.isEmpty ? openRouterModel.trimmingCharacters(in: .whitespacesAndNewlines) : envModel
+        guard !token.isEmpty else { return nil }
+        return OpenRouterClient(
+            apiKey: token,
+            model: model.isEmpty ? OpenRouterClient.defaultModel : model,
             session: session
         )
     }

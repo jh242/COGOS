@@ -1,9 +1,14 @@
 import Foundation
 import Security
 
-struct HermesCredentialStore {
+/// Generic-password Keychain helper keyed by account name.
+struct KeychainCredentialStore {
     private let service = Bundle.main.bundleIdentifier ?? "com.jackhu.cogos"
-    private let account = "hermes_api_token"
+    private let account: String
+
+    init(account: String) {
+        self.account = account
+    }
 
     func read() -> String {
         let query: [String: Any] = [

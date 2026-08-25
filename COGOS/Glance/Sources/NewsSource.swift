@@ -1,25 +1,36 @@
 import Foundation
-#if canImport(FoundationModels)
-import FoundationModels
-#endif
 
-/// Fallback provider — shows cached headlines when nothing higher-priority
-/// is eligible. Headlines are individually summarized with Apple's on-device
-/// Foundation model (5 words max), and entries blocked by content protections
-/// are skipped so the remaining summaries can still be displayed.
+/// Fallback glance provider. Fetches Google News RSS, then asks a cheap
+/// OpenRouter model for a three-line digest sized for the Quick Notes pane.
+/// If no API key is set (or the model call fails), clipped headlines are shown
+/// instead. Last good copy is kept when a refresh fails.
+@MainActor
 final class NewsSource: ContextProvider {
     let name = "news"
 
     private static let refreshInterval: TimeInterval = 30 * 60
-    private static let separator = " · "
-    private static let maxHeadlines = 4
-    private static let wordsPerHeadline = 5
+    private static let rssTimeout: TimeInterval = 10
 
-    var topic: String = "BUSINESS"
+    private let settings: Settings
+    private let session: URLSession
+    private let locale: Locale
+    private let clientOverride: OpenRouterClient?
 
     private var lastFetch: Date?
+    private var lastTopic: NewsTopic?
     private var displayBody: String = ""
-    private let summarizer = HeadlineSummarizer()
+
+    init(
+        settings: Settings,
+        session: URLSession = .shared,
+        locale: Locale = .current,
+        client: OpenRouterClient? = nil
+    ) {
+        self.settings = settings
+        self.session = session
+        self.locale = locale
+        self.clientOverride = client
+    }
 
     var currentNote: QuickNote? {
         guard !displayBody.isEmpty else { return nil }
@@ -27,132 +38,65 @@ final class NewsSource: ContextProvider {
     }
 
     func refresh(_ ctx: GlanceContext) async {
-        if let last = lastFetch, ctx.now.timeIntervalSince(last) < Self.refreshInterval {
+        let topic = settings.newsTopic
+        if let last = lastFetch,
+           lastTopic == topic,
+           ctx.now.timeIntervalSince(last) < Self.refreshInterval {
             return
         }
-        lastFetch = ctx.now
 
-        let urlStr = "https://news.google.com/rss/headlines/section/topic/\(topic)?hl=en-US&gl=US&ceid=US:en"
-        guard let url = URL(string: urlStr) else { return }
-
-        var req = URLRequest(url: url)
-        req.timeoutInterval = 5
-        let pair: (Data, URLResponse)
+        let titles: [String]
         do {
-            pair = try await URLSession.shared.data(for: req)
+            titles = try await fetchTitles(topic: topic)
         } catch {
-            trace("RSS fetch threw: \(error)")
+            trace("RSS fetch failed: \(error)")
             return
         }
-        let (data, response) = pair
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            trace("RSS HTTP \(http.statusCode)")
-            return
-        }
-
-        let titles = GoogleNewsRSSParser.parseItemTitles(data)
         guard !titles.isEmpty else {
             trace("RSS parsed 0 titles")
             return
         }
 
-        var shortened: [String] = []
-        for title in titles.prefix(Self.maxHeadlines) {
-            let clean = cleanTitle(title)
-            guard !clean.isEmpty else { continue }
-
-            if let summary = await summarizer.summarize(clean, maxWords: Self.wordsPerHeadline), !summary.isEmpty {
-                shortened.append(summary)
-            } else {
-                trace("Skipped headline due to model/content protection: \(clean)")
-            }
-        }
-
-        displayBody = shortened.joined(separator: Self.separator)
-        trace("RSS → \(shortened.count) headlines → \"\(displayBody)\"")
-    }
-
-    private func cleanTitle(_ raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let dashRange = trimmed.range(of: " - ", options: .backwards) {
-            return String(trimmed[..<dashRange.lowerBound])
-        }
-        return trimmed
-    }
-
-    private func trace(_ msg: String) { print("[news] \(msg)") }
-}
-
-private actor HeadlineSummarizer {
-    func summarize(_ headline: String, maxWords: Int) async -> String? {
-#if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
+        let digestTitles = Array(titles.prefix(NewsHeadlines.maxSourceHeadlines))
+        var body = NewsHeadlines.fallbackBody(titles: digestTitles)
+        if let client = clientOverride ?? settings.makeOpenRouterClient(session: session) {
             do {
-                let session = LanguageModelSession()
-                let prompt = """
-                Summarize this news headline in \(maxWords) words or fewer.
-                Output only the summary phrase with no punctuation at the end.
-
-                Headline: \(headline)
-                """
-                let response = try await session.respond(to: prompt)
-                return trimToWordLimit(response.content, maxWords: maxWords)
+                let raw = try await client.complete(
+                    system: NewsHeadlines.systemPrompt,
+                    user: NewsHeadlines.userPrompt(titles: digestTitles)
+                )
+                let sanitized = NewsHeadlines.sanitize(raw)
+                if sanitized.isEmpty {
+                    trace("digest empty after sanitize — using headline fallback")
+                } else {
+                    body = sanitized
+                }
             } catch {
-                return nil
+                trace("OpenRouter digest failed: \(error) — using headline fallback")
             }
+        } else {
+            trace("no OpenRouter key — using clipped headlines")
         }
-#endif
-        return trimToWordLimit(headline, maxWords: maxWords)
+
+        displayBody = body
+        lastFetch = ctx.now
+        lastTopic = topic
+        trace("RSS → \(digestTitles.count) titles → \"\(displayBody.replacingOccurrences(of: "\n", with: " | "))\"")
     }
 
-    private func trimToWordLimit(_ text: String, maxWords: Int) -> String {
-        text
-            .split(whereSeparator: \.isWhitespace)
-            .prefix(maxWords)
-            .joined(separator: " ")
-    }
-}
+    private func fetchTitles(topic: NewsTopic) async throws -> [String] {
+        var req = URLRequest(url: topic.rssURL(locale: locale))
+        req.timeoutInterval = Self.rssTimeout
+        req.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+            forHTTPHeaderField: "User-Agent"
+        )
+        req.setValue("application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", forHTTPHeaderField: "Accept")
 
-/// Minimal XMLParserDelegate that collects the text of <title> elements nested inside <item>.
-private final class GoogleNewsRSSParser: NSObject, XMLParserDelegate {
-    private var titles: [String] = []
-    private var inItem = false
-    private var inTitle = false
-    private var buffer = ""
-
-    static func parseItemTitles(_ data: Data) -> [String] {
-        let delegate = GoogleNewsRSSParser()
-        let parser = XMLParser(data: data)
-        parser.delegate = delegate
-        parser.parse()
-        return delegate.titles
-    }
-
-    func parser(_ parser: XMLParser, didStartElement elementName: String,
-                namespaceURI: String?, qualifiedName qName: String?,
-                attributes attributeDict: [String: String] = [:]) {
-        if elementName == "item" { inItem = true }
-        if inItem && elementName == "title" {
-            inTitle = true
-            buffer = ""
+        let (data, response) = try await session.data(for: req)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
         }
-    }
-
-    func parser(_ parser: XMLParser, foundCharacters string: String) {
-        if inTitle { buffer += string }
-    }
-
-    func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
-        if inTitle, let s = String(data: CDATABlock, encoding: .utf8) { buffer += s }
-    }
-
-    func parser(_ parser: XMLParser, didEndElement elementName: String,
-                namespaceURI: String?, qualifiedName qName: String?) {
-        if inItem && elementName == "title" {
-            titles.append(buffer)
-            inTitle = false
-            buffer = ""
-        }
-        if elementName == "item" { inItem = false }
+        return NewsHeadlines.parseItemTitles(data)
     }
 }

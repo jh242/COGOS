@@ -38,7 +38,7 @@ final class GlanceService: ObservableObject {
             CalendarSource(),
             TransitSource(location: location),
             CommuteSource(location: location, settings: settings),
-            NewsSource()
+            NewsSource(settings: settings)
         ]
     }
 

@@ -8,6 +8,25 @@ final class SettingsCommuteLocationsTests: XCTestCase {
     override func setUp() {
         super.setUp()
         UserDefaults.standard.removeObject(forKey: key)
+        UserDefaults.standard.removeObject(forKey: "news_topic")
+        UserDefaults.standard.removeObject(forKey: "openrouter_model")
+    }
+
+    func testNewsTopicDefaultsToTopStories() {
+        let s = Settings()
+        XCTAssertEqual(s.newsTopic, .top)
+    }
+
+    func testNewsTopicRoundTripsThroughUserDefaults() {
+        let s1 = Settings()
+        s1.newsTopic = .technology
+        let s2 = Settings()
+        XCTAssertEqual(s2.newsTopic, .technology)
+    }
+
+    func testOpenRouterModelDefaults() {
+        let s = Settings()
+        XCTAssertEqual(s.openRouterModel, OpenRouterClient.defaultModel)
     }
 
     func testDefaultIsEmpty() {
