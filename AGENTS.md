@@ -9,9 +9,11 @@ This file gives Codex the context it needs to work effectively in this repo.
 An **iOS-only** Swift / SwiftUI app that turns **Even Realities G1 smart
 glasses** into a wearable AI terminal. The phone connects to the glasses
 over dual BLE (one connection per arm), streams LC3 audio from the glasses
-microphone, transcribes speech via the native iOS Speech framework, sends the
-transcript to a remote Hermes Agent, and streams the reply to the
-glasses waveguide display using the firmware-native 0x54 TEXT command.
+microphone, transcribes speech via the native iOS Speech framework, and
+sends the transcript either to a remote Hermes Agent or to an on-device
+SwiftAgent loop over OpenRouter. Replies stream (Hermes) or land as a
+finished page (OpenRouter) on the glasses waveguide via the firmware-native
+0x54 TEXT command.
 
 Pure Swift / SwiftUI. iOS 26+. Bundle ID: `com.jackhu.cogos`.
 
@@ -29,7 +31,7 @@ Pure Swift / SwiftUI. iOS 26+. Bundle ID: `com.jackhu.cogos`.
 | Speech-to-text | Apple Speech framework (`SFSpeechRecognizer`, on-device) |
 | Audio format | LC3 codec (C sources under `COGOS/Session/lc3/`) |
 | HTTP client | `URLSession` |
-| AI backend | Remote Hermes Agent Responses API over HTTPS/SSE |
+| AI backend | Hermes Responses API, or on-device SwiftAgent → OpenRouter Responses API |
 
 ---
 
@@ -42,7 +44,8 @@ COGOS/
   Protocol/          Proto, EvenAIText54, DashboardProto, QuickNoteProto, CRC32XZ
   Session/           EvenAISession, SpeechStreamRecognizer,
                      PcmConverter, LC3 codec (C)
-  API/               HermesClient, SSEParser
+  API/               HermesClient, OpenRouterClient, SSEParser
+  Agent/             OpenRouter SwiftAgent session, calendar/weather/location tools
   Glance/            GlanceService + Sources/ (location, calendar, weather,
                      news, transit, notifications)
   Platform/          NativeLocation, Settings, NotificationWhitelist
@@ -130,8 +133,9 @@ Max payload per chunk: 100 bytes. ACK: `54 0A 00 <seq> <sub> <count> 00 <idx> 00
 [Release]       → 0xF5 0x18
   → recordOverByOS()
      → proto.micOff()
-     → settings.makeHermesClient().streamResponse(...)
-     → proto.sendEvenAITextPrepare() then cumulative proto.sendEvenAIText(...)
+     → Hermes: settings.makeHermesClient().streamResponse(...)
+       or OpenRouter: OpenRouterSpokenAgent.respond(to:) then pushReply
+     → proto.sendEvenAITextPrepare() then proto.sendEvenAIText(...)
 [Single tap]    → 0xF5 0x01 → long-reply page backward (L) / forward (R)
 [Viewer close]  → 0xF5 0x00 → close + clear the interactive viewer
 [Double-tap]    → 0xF5 0x20 → cancel response, close viewer, clear session
@@ -152,6 +156,23 @@ Keychain. Scheme overrides are `HERMES_API_URL` and `HERMES_API_KEY`.
 
 ---
 
+## OpenRouter spoken agent (`COGOS/Agent/`)
+
+Settings can point spoken questions at OpenRouter instead of Hermes. COGOS
+embeds SwiftedMind SwiftAgent (`OpenAISession`) with `store: false` and the
+full transcript on every `POST /v1/responses` (OpenRouter is stateless).
+Client tools wrap EventKit / WeatherKit / `NativeLocation`. The glasses get
+`respond()`'s final text via `EvenTextRenderer.pushReply` — not token
+streaming and never tool JSON. Transcript trim keeps the last 12 user
+prompts, dropping oldest turns from the front.
+
+The OpenRouter key is the same Keychain item as the news digest
+(`OPENROUTER_API_KEY`). Agent model is `OPENROUTER_AGENT_MODEL` / Settings
+(default `google/gemini-2.5-flash`). News digest still uses cheap
+`chat/completions`. Glance payloads are never uploaded.
+
+---
+
 ## Conventions and gotchas
 
 - Always send L before R. `BleRequestQueue.sendBoth(_:)` handles it; `Proto`
@@ -164,6 +185,7 @@ Keychain. Scheme overrides are `HERMES_API_URL` and `HERMES_API_KEY`.
 - Actor isolation: `Proto` and `BleRequestQueue` are actors; call with `await`.
 - `EvenAISession.clear()` resets all state — call on every exit path.
 - The Hermes token lives in Keychain or `HERMES_API_KEY`; never commit it.
+- The OpenRouter key lives in Keychain or `OPENROUTER_API_KEY`; never commit it.
 
 ---
 
@@ -183,4 +205,5 @@ LE accessories. Requires a physical iOS device (BLE cannot be simulated).
 4. `COGOS/Protocol/Proto.swift` — command helpers, packet assemblers
 5. `COGOS/Protocol/EvenAIText54.swift` — 0x54 streaming text encoder
 6. `COGOS/API/HermesClient.swift` — Hermes Responses API transport
-7. `COGOS/App/AppState.swift` — top-level wiring
+7. `COGOS/Agent/OpenRouterSpokenAgent.swift` — on-device OpenRouter tool loop
+8. `COGOS/App/AppState.swift` — top-level wiring

@@ -31,7 +31,8 @@ final class AppState: ObservableObject {
         let session = EvenAISession(
             proto: proto,
             speech: speech,
-            settings: settings
+            settings: settings,
+            location: location
         )
         let glance = GlanceService(
             proto: proto,

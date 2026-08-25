@@ -5,9 +5,23 @@ struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @State private var hermesStatus: String?
     @State private var isCheckingHermes = false
+    @State private var openRouterStatus: String?
+    @State private var isCheckingOpenRouter = false
 
     var body: some View {
         Form {
+            Section {
+                Picker("Spoken backend", selection: $settings.spokenBackend) {
+                    ForEach(SpokenBackend.allCases) { backend in
+                        Text(backend.title).tag(backend)
+                    }
+                }
+            } header: {
+                Text("Spoken assistant")
+            } footer: {
+                Text("Hermes keeps tools on your VPS. OpenRouter runs SwiftAgent on the phone with calendar, weather, and location tools. Long answers scroll on the glasses.")
+            }
+
             Section {
                 TextField("Hermes API URL", text: $settings.hermesURL)
                     .textInputAutocapitalization(.never)
@@ -39,6 +53,15 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 OpenRouterModelPicker()
+                OpenRouterAgentModelPicker()
+                Button(isCheckingOpenRouter ? "Checking..." : "Test spoken agent") {
+                    testOpenRouterConnection()
+                }
+                .disabled(isCheckingOpenRouter || settings.makeOpenRouterAgentClient() == nil)
+                if let openRouterStatus {
+                    Text(openRouterStatus)
+                        .foregroundStyle(.secondary)
+                }
                 if let error = settings.openRouterCredentialError {
                     Text(error)
                         .foregroundStyle(.red)
@@ -46,7 +69,7 @@ struct SettingsView: View {
             } header: {
                 Text("OpenRouter")
             } footer: {
-                Text("Used only for the news glance digest. The key is stored in Keychain. Free models rotate; the list refreshes from OpenRouter. Default is \(OpenRouterClient.defaultModel). Override with OPENROUTER_API_KEY / OPENROUTER_MODEL in the Xcode scheme.")
+                Text("One key in Keychain. News digest uses a cheap free model (default \(OpenRouterClient.defaultModel)). Spoken questions use a tool-capable model (default \(OpenRouterClient.defaultAgentModel)). Override with OPENROUTER_API_KEY, OPENROUTER_MODEL, or OPENROUTER_AGENT_MODEL.")
             }
 
             Section {
@@ -138,6 +161,20 @@ struct SettingsView: View {
             isCheckingHermes = false
         }
     }
+
+    private func testOpenRouterConnection() {
+        guard let client = settings.makeOpenRouterAgentClient() else { return }
+        isCheckingOpenRouter = true
+        openRouterStatus = nil
+        Task {
+            do {
+                openRouterStatus = try await client.checkConnection()
+            } catch {
+                openRouterStatus = error.localizedDescription
+            }
+            isCheckingOpenRouter = false
+        }
+    }
 }
 
 private struct OpenRouterModelPicker: View {
@@ -158,7 +195,7 @@ private struct OpenRouterModelPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Model", selection: pickerBinding) {
+            Picker("News model", selection: pickerBinding) {
                 ForEach(models) { model in
                     Text(model.name).tag(model.id)
                 }
@@ -205,5 +242,51 @@ private struct OpenRouterModelPicker: View {
         } catch {
             listError = "Couldn't refresh the free-model list."
         }
+    }
+}
+
+private struct OpenRouterAgentModelPicker: View {
+    @EnvironmentObject var settings: Settings
+    @State private var usingCustom = false
+
+    private static let customSentinel = "__custom__"
+
+    private var selection: String {
+        usingCustom ? Self.customSentinel : settings.openRouterAgentModel
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Spoken model", selection: pickerBinding) {
+                ForEach(OpenRouterClient.agentModelPresets, id: \.self) { slug in
+                    Text(slug).tag(slug)
+                }
+                Text("Custom…").tag(Self.customSentinel)
+            }
+            .pickerStyle(.menu)
+            if usingCustom {
+                TextField("provider/model", text: $settings.openRouterAgentModel)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+            }
+        }
+        .onAppear {
+            usingCustom = !OpenRouterClient.agentModelPresets.contains(settings.openRouterAgentModel)
+        }
+    }
+
+    private var pickerBinding: Binding<String> {
+        Binding(
+            get: { selection },
+            set: { newValue in
+                if newValue == Self.customSentinel {
+                    usingCustom = true
+                } else {
+                    usingCustom = false
+                    settings.openRouterAgentModel = newValue
+                }
+            }
+        )
     }
 }

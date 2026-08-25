@@ -10,6 +10,8 @@ final class SettingsCommuteLocationsTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: key)
         UserDefaults.standard.removeObject(forKey: "news_topic")
         UserDefaults.standard.removeObject(forKey: "openrouter_model")
+        UserDefaults.standard.removeObject(forKey: "openrouter_agent_model")
+        UserDefaults.standard.removeObject(forKey: "spoken_backend")
     }
 
     func testNewsTopicDefaultsToTopStories() {
@@ -27,6 +29,17 @@ final class SettingsCommuteLocationsTests: XCTestCase {
     func testOpenRouterModelDefaults() {
         let s = Settings()
         XCTAssertEqual(s.openRouterModel, OpenRouterClient.defaultModel)
+        XCTAssertEqual(s.openRouterAgentModel, OpenRouterClient.defaultAgentModel)
+        XCTAssertEqual(s.spokenBackend, .hermes)
+    }
+
+    func testSpokenBackendAndAgentModelRoundTrip() {
+        let s1 = Settings()
+        s1.spokenBackend = .openRouter
+        s1.openRouterAgentModel = "openai/gpt-4o-mini"
+        let s2 = Settings()
+        XCTAssertEqual(s2.spokenBackend, .openRouter)
+        XCTAssertEqual(s2.openRouterAgentModel, "openai/gpt-4o-mini")
     }
 
     func testDefaultIsEmpty() {

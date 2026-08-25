@@ -141,6 +141,20 @@ final class OpenRouterClientTests: XCTestCase {
         XCTAssertEqual(requestBox.get()?.httpMethod, "GET")
     }
 
+    func testCheckConnectionUsesBearerAndReportsMissingCatalogSlug() async throws {
+        OpenRouterMockURLProtocol.handler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
+            return OpenRouterMockURLProtocol.response(
+                for: request,
+                status: 200,
+                body: #"{"data":[{"id":"other/model","name":"Other","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text"]}}]}"#
+            )
+        }
+        let status = try await makeClient().checkConnection()
+        XCTAssertTrue(status.contains("Connected"))
+        XCTAssertTrue(status.contains("was not listed"))
+    }
+
     private func makeClient() -> OpenRouterClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [OpenRouterMockURLProtocol.self]

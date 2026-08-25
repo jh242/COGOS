@@ -38,11 +38,19 @@ struct OpenRouterModelInfo: Identifiable, Hashable, Sendable {
 }
 
 /// Thin OpenAI-compatible chat client aimed at OpenRouter.
-/// Used by the news glance for a cheap, non-streaming digest — not for
-/// the Hermes conversation path.
+/// Used by the news glance for a cheap, non-streaming digest and by Settings
+/// for the spoken-agent connection check. The glasses question loop uses
+/// SwiftAgent (`OpenRouterSpokenAgent`), not this client's `complete()`.
 struct OpenRouterClient: Sendable {
     static let defaultBaseURL = URL(string: "https://openrouter.ai/api/v1")!
     static let defaultModel = "poolside/laguna-xs-2.1:free"
+    static let defaultAgentModel = "google/gemini-2.5-flash"
+    static let agentModelPresets = [
+        "google/gemini-2.5-flash",
+        "openai/gpt-4o-mini",
+        "anthropic/claude-sonnet-4",
+        "openrouter/auto"
+    ]
 
     /// Shown immediately in Settings so the picker isn't empty before the
     /// live `/models` list arrives. Free-pool membership rotates.
@@ -111,6 +119,29 @@ struct OpenRouterClient: Sendable {
         let text = decoded.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !text.isEmpty else { throw OpenRouterClientError.emptyResponse }
         return text
+    }
+
+    /// Authenticated catalog ping used by Settings → Test connection.
+    func checkConnection() async throws -> String {
+        var request = URLRequest(url: endpoint("models"))
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(httpReferer, forHTTPHeaderField: "HTTP-Referer")
+        request.setValue(appTitle, forHTTPHeaderField: "X-Title")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenRouterClientError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw Self.httpError(statusCode: http.statusCode, body: data)
+        }
+        let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
+        if decoded.data.contains(where: { $0.id == model }) {
+            return "Connected — \(model) is in the catalog"
+        }
+        return "Connected — \(model) was not listed; OpenRouter may still route it"
     }
 
     /// Public catalog; no API key required. Returns glanceable free text models

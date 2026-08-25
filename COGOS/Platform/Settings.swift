@@ -49,6 +49,12 @@ final class Settings: ObservableObject {
     }
     @Published private(set) var openRouterCredentialError: String?
     @Published var openRouterModel: String { didSet { defaults.set(openRouterModel, forKey: "openrouter_model") } }
+    @Published var openRouterAgentModel: String {
+        didSet { defaults.set(openRouterAgentModel, forKey: "openrouter_agent_model") }
+    }
+    @Published var spokenBackend: SpokenBackend {
+        didSet { defaults.set(spokenBackend.rawValue, forKey: "spoken_backend") }
+    }
     @Published var newsTopic: NewsTopic {
         didSet { defaults.set(newsTopic.rawValue, forKey: "news_topic") }
     }
@@ -78,6 +84,17 @@ final class Settings: ObservableObject {
         let storedModel = defaults.string(forKey: "openrouter_model")?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.openRouterModel = storedModel.isEmpty ? OpenRouterClient.defaultModel : storedModel
+        let storedAgentModel = defaults.string(forKey: "openrouter_agent_model")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.openRouterAgentModel = storedAgentModel.isEmpty
+            ? OpenRouterClient.defaultAgentModel
+            : storedAgentModel
+        if let raw = defaults.string(forKey: "spoken_backend"),
+           let backend = SpokenBackend(rawValue: raw) {
+            self.spokenBackend = backend
+        } else {
+            self.spokenBackend = .hermes
+        }
         if let raw = defaults.string(forKey: "news_topic"), let topic = NewsTopic(rawValue: raw) {
             self.newsTopic = topic
         } else {
@@ -146,5 +163,36 @@ final class Settings: ObservableObject {
             model: model.isEmpty ? OpenRouterClient.defaultModel : model,
             session: session
         )
+    }
+
+    func makeOpenRouterAgentClient(session: URLSession = .shared) -> OpenRouterClient? {
+        guard let credentials = openRouterAgentCredentials() else { return nil }
+        return OpenRouterClient(
+            apiKey: credentials.apiKey,
+            model: credentials.model,
+            session: session
+        )
+    }
+
+    func makeOpenRouterSpokenAgent(location: NativeLocation) -> OpenRouterSpokenAgent? {
+        guard let credentials = openRouterAgentCredentials() else { return nil }
+        return OpenRouterSpokenAgent(
+            apiKey: credentials.apiKey,
+            model: credentials.model,
+            sessionID: hermesConversationID,
+            location: location
+        )
+    }
+
+    func openRouterAgentCredentials() -> (apiKey: String, model: String)? {
+        let env = ProcessInfo.processInfo.environment
+        let envKey = env["OPENROUTER_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let envModel = env["OPENROUTER_AGENT_MODEL"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let token = envKey.isEmpty ? openRouterAPIKey.trimmingCharacters(in: .whitespacesAndNewlines) : envKey
+        let model = envModel.isEmpty
+            ? openRouterAgentModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            : envModel
+        guard !token.isEmpty else { return nil }
+        return (token, model.isEmpty ? OpenRouterClient.defaultAgentModel : model)
     }
 }

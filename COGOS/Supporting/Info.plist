@@ -63,6 +63,8 @@
 	<string>This app needs Bluetooth access to connect to your smart glasses.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>This app reads your calendar to show upcoming events on your glasses.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>This app reads your calendar to show upcoming events on your glasses and answer spoken questions about your schedule.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>COGOS needs background location so weather and nearby transit keep updating on your glasses while your phone is in your pocket.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

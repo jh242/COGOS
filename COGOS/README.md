@@ -25,10 +25,24 @@ Enter the HTTPS Hermes API URL and access token in Settings, or export
 in Keychain. Hermes owns model selection, memory, skills, and tools; COGOS
 sends only final speech transcripts and renders streamed final-answer text.
 
-The news glance uses a separate OpenRouter key (`OPENROUTER_API_KEY`, also in
-Settings / Keychain) and a free chat model from the Settings dropdown
+## OpenRouter spoken agent
+
+Settings → Spoken assistant can switch the glasses question path from Hermes
+to OpenRouter. That path uses [SwiftAgent](https://github.com/SwiftedMind/SwiftAgent)
+(`OpenAISession`) against `https://openrouter.ai/api/v1/responses`. The phone
+owns the tool loop (calendar / weather / location), resends the full transcript
+every turn, and pushes the finished answer to the glasses scroller — it does
+not stream tokens or tool JSON to the waveguide.
+
+Use a tool-capable model (default `google/gemini-2.5-flash`), not the news
+digest free model. The same OpenRouter key is stored in Keychain
+(`OPENROUTER_API_KEY`). Override the agent slug with `OPENROUTER_AGENT_MODEL`.
+
+The news glance still uses a separate cheap chat completion
 (`poolside/laguna-xs-2.1:free` by default) to turn RSS headlines into a
 three-line digest. Without that key it falls back to clipped headlines.
+
+After adding or changing Swift packages, re-run `xcodegen generate`.
 
 ## Project layout
 
@@ -39,7 +53,8 @@ COGOS/
 ├── Protocol/          Proto, EvenAIText54, DashboardProto, QuickNoteProto, CRC32XZ
 ├── Session/           EvenAISession, EvenTextRenderer, VoiceCaptureController,
 │                      SpeechStreamRecognizer, PcmConverter, LC3 codec
-├── API/               HermesClient, SSEParser
+├── API/               HermesClient, OpenRouterClient, SSEParser
+├── Agent/             OpenRouter SwiftAgent session, device tools
 ├── Glance/            GlanceService + Sources/
 ├── Platform/          NativeLocation, Settings, NotificationWhitelist
 ├── Models/            EvenaiModel, HistoryStore, NotifyModel
