@@ -22,6 +22,8 @@ xcuserdata/
 .build/
 Packages/
 Package.resolved
+# Xcode Cloud needs this pin file; automatic resolution is disabled.
+!COGOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Generated Linux compile copies
 scripts/linux-compile/Sources/
