@@ -11,8 +11,28 @@ if [[ -f "${SWIFTLY_HOME_DIR:-${HOME}/.local/share/swiftly}/env.sh" ]]; then
   . "${SWIFTLY_HOME_DIR:-${HOME}/.local/share/swiftly}/env.sh"
 fi
 
+ensure_linux_swift_deps() {
+  if [[ "$(uname -s)" != "Linux" ]]; then
+    return
+  fi
+  if ldconfig -p 2>/dev/null | grep -q 'libncurses.so.6' \
+    && command -v g++ >/dev/null 2>&1; then
+    return
+  fi
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "Missing libncurses / g++ and apt-get is not available." >&2
+    return 1
+  fi
+  echo "Installing Swift toolchain apt packages…"
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    gnupg2 libcurl4-openssl-dev libpython3-dev libxml2-dev \
+    libncurses-dev libz3-dev g++ build-essential pkg-config
+}
+
 ensure_swift() {
-  if command -v swift >/dev/null 2>&1; then
+  ensure_linux_swift_deps
+  if command -v swift >/dev/null 2>&1 && swift --version >/dev/null 2>&1; then
     swift --version
     return
   fi
