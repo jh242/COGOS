@@ -84,7 +84,7 @@ schemes:
         - name: Enable SwiftAgentMacros
           settingsTarget: COGOS
           script: |
-            "${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh"
+            /bin/sh "${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh"
     test:
       targets:
         - COGOSTests
@@ -94,4 +94,4 @@ schemes:
         - name: Enable SwiftAgentMacros
           settingsTarget: COGOS
           script: |
-            "${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh"
+            /bin/sh "${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh"

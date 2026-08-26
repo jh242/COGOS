@@ -11,7 +11,7 @@
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
                title = "Enable SwiftAgentMacros"
-               scriptText = "&quot;${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh&quot;&#10;">
+               scriptText = "/bin/sh &quot;${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh&quot;&#10;">
                <EnvironmentBuildable>
                   <BuildableReference
                      BuildableIdentifier = "primary"
@@ -125,7 +125,7 @@
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
                title = "Enable SwiftAgentMacros"
-               scriptText = "&quot;${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh&quot;&#10;">
+               scriptText = "/bin/sh &quot;${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh&quot;&#10;">
                <EnvironmentBuildable>
                   <BuildableReference
                      BuildableIdentifier = "primary"

@@ -62,12 +62,11 @@ Xcode Cloud has automatic resolution disabled, so Archive fails without that pin
 Do not “Update to Latest Package Versions” for OpenAI: SwiftAgent still
 uses `Includable` / `ToolChoicePayload`, which MacPaw renamed on `main`.
 `resolve-spm.sh` pins OpenAI to the revision SwiftAgent itself resolved.
-SwiftAgentMacros is enabled for Cloud Archive from committed config, not from
-laptop Trust & Enable: the shared `COGOS` scheme Archive/Build pre-actions,
-`ci_scripts/enable_swiftagent_macros.sh` (post-clone and pre-xcodebuild),
-and `SWIFT_ENABLE_EXPLICIT_MODULES = NO` on the COGOS archive target.
-Do not put `-skipMacroValidation` in Other Swift Flags — that is an
-`xcodebuild` flag, and graph construction happens before swiftc flags.
+Cloud Archive skips Swift macro fingerprint validation entirely
+(`IDESkipMacroFingerprintValidation`) via `ci_scripts/` (post-clone and
+pre-xcodebuild, invoked with `/bin/sh`) and the shared `COGOS` scheme
+Archive/Build pre-actions. That is the Cloud stand-in for
+`xcodebuild -skipMacroValidation`. Do not put that flag in Other Swift Flags.
 
 ## Project layout
 
