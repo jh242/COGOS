@@ -59,7 +59,10 @@ After adding or changing Swift packages, re-run `xcodegen generate` and
 `./scripts/resolve-spm.sh`, then commit
 `COGOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`.
 Xcode Cloud has automatic resolution disabled, so Archive fails without that pin file.
-`ci_scripts/` trusts SwiftAgentMacros (`macros.json` plus `-skipMacroValidation`) so Cloud can Archive without the local “Enable Macros” dialog.
+`ci_scripts/ci_post_clone.sh` and `ci_pre_xcodebuild.sh` set
+`IDESkipMacroFingerprintValidation` (the usual Xcode Cloud stand-in for
+`xcodebuild -skipMacroValidation`) so Archive can use SwiftAgentMacros without
+the local “Enable Macros” dialog.
 
 ## Project layout
 

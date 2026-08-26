@@ -52,11 +52,6 @@ targets:
     scheme:
       testTargets:
         - COGOSTests
-      preActions:
-        - name: Trust SwiftAgent macros
-          script: |
-            "${SRCROOT}/ci_scripts/trust_macros.sh"
-          settingsTarget: COGOS
 
   COGOSTests:
     type: bundle.unit-test

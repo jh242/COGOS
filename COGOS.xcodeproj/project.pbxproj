@@ -213,7 +213,6 @@
 		B1CADF95E8AEEC032E84E3C6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B4D36758602335C4BA63ACB0 /* tables.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = tables.h; sourceTree = "<group>"; };
 		B5B695492CC6171FC8FAC05A /* WeatherKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WeatherKit.framework; path = System/Library/Frameworks/WeatherKit.framework; sourceTree = SDKROOT; };
-		B6A0D3F0ADF753D20967221B /* trust_macros.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = trust_macros.sh; sourceTree = "<group>"; };
 		B73561314F90501277D6F481 /* tables.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tables.c; sourceTree = "<group>"; };
 		B9AFB6766B48A69DC9C88BC1 /* SpeechStreamRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechStreamRecognizer.swift; sourceTree = "<group>"; };
 		BE717038BC69FDB4A0412449 /* Proto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Proto.swift; sourceTree = "<group>"; };
@@ -338,7 +337,6 @@
 				5C3D69CD9290532257152148 /* ci_post_clone.sh */,
 				06D96388619AE2B84D3C3408 /* ci_pre_xcodebuild.sh */,
 				400CB4BB6525A41DAB61CE07 /* macros.json */,
-				B6A0D3F0ADF753D20967221B /* trust_macros.sh */,
 			);
 			path = ci_scripts;
 			sourceTree = "<group>";
