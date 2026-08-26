@@ -18,6 +18,11 @@ packages:
     url: https://github.com/Cocoanetics/SwiftMail
     exactVersion: 1.11.0
 
+# Project-wide so SwiftAgent's generated macro target inherits it on Cloud.
+settings:
+  base:
+    SWIFT_ENABLE_EXPLICIT_MODULES: "NO"
+
 targets:
   COGOS:
     type: application
@@ -39,6 +44,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
         GENERATE_INFOPLIST_FILE: false
+        SWIFT_ENABLE_EXPLICIT_MODULES: "NO"
     dependencies:
       - sdk: WeatherKit.framework
       - package: SwiftAgent
@@ -49,9 +55,6 @@ targets:
       path: COGOS/Supporting/COGOS.entitlements
       properties:
         com.apple.developer.weatherkit: true
-    scheme:
-      testTargets:
-        - COGOSTests
 
   COGOSTests:
     type: bundle.unit-test
@@ -67,3 +70,28 @@ targets:
       - target: COGOS
       - package: SwiftMail
         product: SwiftMail
+
+# Shared scheme (xcshareddata), not laptop xcuserdata. Cloud Archive uses
+# `xcodebuild archive -scheme COGOS`; Archive pre-actions run before
+# ComputeTargetDependencyGraph, which is where SwiftAgentMacros is gated.
+schemes:
+  COGOS:
+    build:
+      targets:
+        COGOS: all
+        COGOSTests: [test]
+      preActions:
+        - name: Enable SwiftAgentMacros
+          settingsTarget: COGOS
+          script: |
+            "${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh"
+    test:
+      targets:
+        - COGOSTests
+    archive:
+      config: Release
+      preActions:
+        - name: Enable SwiftAgentMacros
+          settingsTarget: COGOS
+          script: |
+            "${SRCROOT}/ci_scripts/enable_swiftagent_macros.sh"

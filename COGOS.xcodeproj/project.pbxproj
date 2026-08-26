@@ -172,6 +172,7 @@
 		544C153918CAFC78B3B9951C /* ltpf_arm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ltpf_arm.h; sourceTree = "<group>"; };
 		596B6DAF76A720ADDF1C2BFF /* rnnoise.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = rnnoise.h; sourceTree = "<group>"; };
 		5C3D69CD9290532257152148 /* ci_post_clone.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = ci_post_clone.sh; sourceTree = "<group>"; };
+		A11C0E5A7B2D4E1F9C08D3E2 /* enable_swiftagent_macros.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = enable_swiftagent_macros.sh; sourceTree = "<group>"; };
 		5ECBC531930C906486296B1C /* MailTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailTool.swift; sourceTree = "<group>"; };
 		60275CF4FB1B39A55310F9A6 /* bwdet.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bwdet.h; sourceTree = "<group>"; };
 		60BCBC2CDEF9DD2824ACFDDB /* IMAPClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPClientTests.swift; sourceTree = "<group>"; };
@@ -336,6 +337,7 @@
 			children = (
 				5C3D69CD9290532257152148 /* ci_post_clone.sh */,
 				06D96388619AE2B84D3C3408 /* ci_pre_xcodebuild.sh */,
+				A11C0E5A7B2D4E1F9C08D3E2 /* enable_swiftagent_macros.sh */,
 				400CB4BB6525A41DAB61CE07 /* macros.json */,
 			);
 			path = ci_scripts;
@@ -771,6 +773,7 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jackhu.cogos;
 				SDKROOT = iphoneos;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "COGOS/Supporting/COGOS-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -835,6 +838,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
@@ -876,6 +880,7 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jackhu.cogos;
 				SDKROOT = iphoneos;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "COGOS/Supporting/COGOS-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -933,6 +938,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 			};
