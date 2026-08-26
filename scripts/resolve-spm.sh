@@ -57,4 +57,30 @@ EOF
 
 mkdir -p "$DEST"
 cp "$tmp/Package.resolved" "$DEST/Package.resolved"
+
+# SwiftAgent's Package.swift tracks MacPaw/OpenAI on branch: main. That
+# branch renamed Includable / ToolChoicePayload (MacPaw #423), which
+# SwiftAgent 48bfda92 still references. Keep the revision SwiftAgent
+# itself resolved so OpenAIGenerationOptions compiles.
+python3 - "$DEST/Package.resolved" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+pin = "a6e2f87cd13ba062110af9880a40313b7ba860fc"
+data = json.loads(path.read_text())
+found = False
+for item in data["pins"]:
+    if item.get("identity") == "openai":
+        item.setdefault("state", {})["branch"] = "main"
+        item["state"]["revision"] = pin
+        found = True
+        break
+if not found:
+    raise SystemExit("resolve-spm.sh: OpenAI pin missing from Package.resolved")
+path.write_text(json.dumps(data, indent=2) + "\n")
+print(f"Pinned OpenAI to {pin}")
+PY
+
 echo "Wrote $DEST/Package.resolved"
